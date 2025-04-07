@@ -2,9 +2,10 @@
 #include <stdlib.h>
 #include <time.h>
 #include <search.h>
+#include <string.h>
 #include "test.h"
 
-#define OPERATIONS 4
+#define OPERATIONS 100
 
 static int int_cmp(const void * pv1, const void * pv2)
 {
@@ -55,7 +56,7 @@ struct golden_set_s * golden_set_create(size_t capacity)
     }
 }
 
-static int gold_set_add(struct golden_set_s * golden_set, int value)
+static int golden_set_add(struct golden_set_s * golden_set, int value)
 {
     if (golden_set->size == golden_set->capacity)
     {
@@ -74,7 +75,7 @@ static int gold_set_add(struct golden_set_s * golden_set, int value)
         if (golden_set->data[jdx] > value)
         {
             const size_t size = sizeof(int) * (golden_set->size - jdx);
-            memmove(&golden_set->data[jdx], &golden_set->data[jdx + 1], size);
+            memmove(&golden_set->data[jdx+1], &golden_set->data[jdx], size);
             golden_set->data[jdx] = value;
             break;
         }
@@ -88,15 +89,37 @@ static int gold_set_add(struct golden_set_s * golden_set, int value)
     return 0;
 }
 
-static int golden_set_destroy(struct golden_set_s * golden_set)
+static void golden_set_destroy(struct golden_set_s * golden_set)
 {
     free(golden_set->data);
     free(golden_set);
 }
 
+struct check_context_s
+{
+    struct golden_set_s * golden_set;
+    char * error_message;
+};
+
+static int check_callback(const void * value, void * arg)
+{
+    struct check_context_s * check_context = (struct check_context_s*) arg;
+    struct golden_set_s * golden_set = (struct golden_set_s*) check_context->golden_set;
+    const void * ptr = bsearch(value, golden_set->data, golden_set->size, sizeof(int), int_cmp);
+    if (ptr)
+        return 0;
+    else
+    {
+        char buffer[128];
+        sprintf(buffer, "value %d not found in the golden set", *((const int*)value));
+        check_context->error_message = strdup(buffer);
+        return -1;
+    }
+}
+
 char * random_op()
 {
-    size_t capacity = (OPERATIONS / 2);
+    size_t capacity = (OPERATIONS / 10 * 7);
     if (capacity < 16)
         capacity = 16;
 
@@ -111,13 +134,15 @@ char * random_op()
         return NOT_ENOUGH_MEMORY;
     }
 
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 32, int_cmp);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), capacity, int_cmp);
+    char * ret = NULL;
+
     srand((unsigned int) time(NULL));
 
     for (int idx=0; idx<OPERATIONS; idx++)
     {
         // Distribute insert operations at 60% for growing
-        int rnd = rand();
+        const int rnd = rand();
         const operation_type_t operation_type = (rnd > (RAND_MAX/10*6))
             ? operation_type_insert
             : operation_type_erase;
@@ -147,7 +172,12 @@ char * random_op()
             int inserted;
             void * ptr = buffer_set_insert(buffer_set, &value, &inserted);
             if (!inserted)
-                return "unexpected duplicate";
+            {
+                char buffer[128];
+                sprintf(buffer, "unexpected duplicate %d", value);
+                ret = strdup(buffer);
+                break;
+            }
             *((int*)ptr) = value;
         }
         else
@@ -155,11 +185,31 @@ char * random_op()
         }
     }
 
-    //buffer_set_for_each(buffer_set, )
+    if (!ret)
+    {
+        struct check_context_s check_context = { golden_set, NULL };
+        buffer_set_for_each(buffer_set, check_callback, &check_context);
+        ret = check_context.error_message;
+        if (!ret)
+        {
+            for (size_t idx=0; idx<golden_set->size; idx++)
+            {
+                const int value = golden_set->data[idx];
+                const void * ptr = buffer_set_get(buffer_set, &value);
+                if (!ptr)
+                {
+                    char buffer[128];
+                    sprintf(buffer, "value %d not found in the buffer set", value);
+                    ret = strdup(buffer);
+                    break;
+                }
+            }
+        }
+    }
 
     buffer_set_destroy(buffer_set);
     golden_set_destroy(golden_set);
     free(history);
 
-    return NULL;
+    return ret;
 }

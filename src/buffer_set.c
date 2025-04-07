@@ -569,36 +569,50 @@ int buffer_set_erase(
 struct for_each_context_s
 {
     const struct buffer_set_s * buffer_set;
-    void (*func)(const void * value, void * arg);
+    int (*func)(const void * value, void * arg);
     void * arg;
 };
 
-static void _for_each(
+static int _for_each(
     const struct for_each_context_s * context,
     uint16_t idx
 ) {
     const struct buffer_set_s * buffer_set = context->buffer_set;
     struct node_s * node = _get_node(buffer_set, idx);
-    if (node->left != NULL_IDX)
-        _for_each(context, node->left);
+    int rc;
 
-    context->func(_get_node_value(node), context->arg);
+    if (node->left != NULL_IDX)
+    {
+        rc = _for_each(context, node->left);
+        if (rc != 0)
+            return rc;
+    }
+
+    rc = context->func(_get_node_value(node), context->arg);
+    if (rc != 0)
+        return rc;
 
     if (node->right != NULL_IDX)
-        _for_each(context, node->right);
+    {
+        rc = _for_each(context, node->right);
+        if (rc != 0)
+            return rc;
+    }
+
+    return 0;
 }
 
-void buffer_set_for_each(
+int buffer_set_for_each(
     const buffer_set_t * buffer_set,
-    void (*func)(const void * value, void * arg),
+    int (*func)(const void * value, void * arg),
     void * arg
 ) {
     const uint16_t root = buffer_set->root;
-    if (root != NULL_IDX)
-    {
-        const struct for_each_context_s context = { buffer_set, func, arg };
-        _for_each(&context, root);
-    }
+    if (root == NULL_IDX)
+        return 0;
+
+    const struct for_each_context_s context = { buffer_set, func, arg };
+    return _for_each(&context, root);
 }
 
 struct print_debug_context_s

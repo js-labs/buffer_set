@@ -60,9 +60,9 @@ BUFFER_SET_EXPORT int buffer_set_erase(
     void * erased_value
 );
 
-BUFFER_SET_EXPORT void buffer_set_for_each(
+BUFFER_SET_EXPORT int buffer_set_for_each(
     const buffer_set_t * buffer_set,
-    void (*func)(const void * value, void * arg),
+    int (*func)(const void * value, void * arg),
     void * arg
 );
 

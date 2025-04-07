@@ -9,13 +9,13 @@ static void debug_value_printer(FILE * file, const void * value)
 }
 
 // Tests
-void random_op();
+char * random_op();
 
 struct failed_test_s
 {
     struct  failed_test_s * next;
     const char * name;
-    char * failure_description;
+    char * error_message;
 };
 
 static struct failed_test_s * run_test(
@@ -24,14 +24,14 @@ static struct failed_test_s * run_test(
     char * (*test_func)()
 ) {
     printf("[ RUN    ] %s\n", name);
-    char * failure_description = (*test_func)();
-    if (failure_description)
+    char * error_message = (*test_func)();
+    if (error_message)
     {
         printf("[ FAILED ] %s\n", name);
         struct failed_test_s * ft = malloc(sizeof(struct failed_test_s));
         ft->next = failed_tests;
         ft->name = name;
-        ft->failure_description = failure_description;
+        ft->error_message = error_message;
         return ft;
     }
     else
@@ -45,7 +45,7 @@ int main(int argc, const char * argv[])
 {
     struct failed_test_s * failed_tests = NULL;
 
-#define RUN_TEST(name) failed_tests = run_test(failed_tests, #name, &name)
+#define RUN_TEST(name) failed_tests = run_test(failed_tests, #name, name)
 
     RUN_TEST(random_op);
 
@@ -61,12 +61,12 @@ int main(int argc, const char * argv[])
         struct failed_test_s * next = failed_tests->next;
 
         printf("%s: ", ft->name);
-        if (ft->failure_description == NOT_ENOUGH_MEMORY)
+        if (ft->error_message == NOT_ENOUGH_MEMORY)
             printf("not enough memory\n");
         else
         {
-            printf(ft->failure_description);
-            free(ft->failure_description);
+            printf(ft->error_message);
+            free(ft->error_message);
         }
         free(ft);
         if (next == NULL)
