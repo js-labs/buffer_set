@@ -1,17 +1,6 @@
 #include <buffer_set/buffer_set.h>
 #include <stdlib.h>
-
-static int int_less(const void * pv1, const void * pv2)
-{
-    const int v1 = *((const int*) pv1);
-    const int v2 = *((const int*) pv2);
-    if (v1 < v2)
-        return -1;
-    else if (v2 < v1)
-        return 1;
-    else
-        return 0;
-}
+#include "test.h"
 
 static void debug_value_printer(FILE * file, const void * value)
 {
@@ -19,21 +8,71 @@ static void debug_value_printer(FILE * file, const void * value)
     fprintf(file, "%d", v);
 }
 
+// Tests
+void random_op();
+
+struct failed_test_s
+{
+    struct  failed_test_s * next;
+    const char * name;
+    char * failure_description;
+};
+
+static struct failed_test_s * run_test(
+    struct failed_test_s * failed_tests,
+    const char * name,
+    char * (*test_func)()
+) {
+    printf("[ RUN    ] %s\n", name);
+    char * failure_description = (*test_func)();
+    if (failure_description)
+    {
+        printf("[ FAILED ] %s\n", name);
+        struct failed_test_s * ft = malloc(sizeof(struct failed_test_s));
+        ft->next = failed_tests;
+        ft->name = name;
+        ft->failure_description = failure_description;
+        return ft;
+    }
+    else
+    {
+        printf("[     OK ] %s\n", name);
+        return failed_tests;
+    }
+}
+
 int main(int argc, const char * argv[])
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 32, int_less);
-    int inserted;
-    int value;
-    void * ptr;
+    struct failed_test_s * failed_tests = NULL;
 
-    for (int idx=1; idx<20; idx++)
+#define RUN_TEST(name) failed_tests = run_test(failed_tests, #name, &name)
+
+    RUN_TEST(random_op);
+
+#undef RUN_TEST
+
+    if (failed_tests == NULL)
+        return 0;
+
+    printf("Failed tests:\n");
+    struct failed_test_s * ft = failed_tests;
+    for (;;)
     {
-        value = idx;
-        ptr = buffer_set_insert(buffer_set, &value, &inserted);
-        *((int*)ptr) = idx;
+        struct failed_test_s * next = failed_tests->next;
+
+        printf("%s: ", ft->name);
+        if (ft->failure_description == NOT_ENOUGH_MEMORY)
+            printf("not enough memory\n");
+        else
+        {
+            printf(ft->failure_description);
+            free(ft->failure_description);
+        }
+        free(ft);
+        if (next == NULL)
+            break;
+        ft = next;
     }
 
-    buffer_set_print_debug(buffer_set, stdout, debug_value_printer);
-    printf("\n");
-    return 0;
+    return -1;
 }

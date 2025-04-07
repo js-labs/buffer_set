@@ -36,13 +36,17 @@ typedef struct buffer_set_s buffer_set_t;
 BUFFER_SET_EXPORT buffer_set_t * buffer_set_create(
     size_t value_size,
     size_t capacity,
-    int (*cmp)(const void * v1, const void * v2)
+    int (*compar)(const void * v1, const void * v2)
 );
 
 BUFFER_SET_EXPORT void * buffer_set_insert(
     buffer_set_t * buffer_set,
     const void * value,
     int * inserted
+);
+
+BUFFER_SET_EXPORT size_t buffer_set_get_size(
+    buffer_set_t * buffer_set
 );
 
 BUFFER_SET_EXPORT void * buffer_set_get(

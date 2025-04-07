@@ -26,7 +26,7 @@ struct buffer_set_s
 {
     size_t value_size;
     size_t node_size;
-    int (*cmp)(const void * v1, const void * v2);
+    int (*compar)(const void * v1, const void * v2);
     void * buffer;
     uint16_t size;
     uint16_t root;
@@ -56,22 +56,26 @@ static inline void * _get_node_value(struct node_s * node)
 
 static uint16_t _buffer_set_make_free_list(void * buffer, size_t node_size, size_t count)
 {
-    uint16_t idx = 0;
-    struct free_node_s * free_node = (struct free_node_s*) (((char*)buffer) + (node_size * idx));
-    for (; count>0; count--)
+    for (int16_t idx=0;;)
     {
-        idx++;
-        free_node->next = idx;
-        free_node = (struct free_node_s*)(((char*)buffer) + (node_size * idx));
+        struct free_node_s * free_node = (struct free_node_s*) (((char*)buffer) + (node_size * idx));
+        if (--count == 0)
+        {
+            free_node->next = NULL_IDX;
+            return 0;
+        }
+        else
+        {
+            idx++;
+            free_node->next = idx;
+        }
     }
-    free_node->next = NULL_IDX;
-    return 0;
 }
 
 buffer_set_t * buffer_set_create(
     size_t value_size,
     size_t capacity,
-    int (*cmp)(const void * v1, const void * v2)
+    int (*compar)(const void * v1, const void * v2)
 ) {
     struct buffer_set_s * buffer_set = malloc(sizeof(struct buffer_set_s));
     if (buffer_set == NULL)
@@ -89,7 +93,7 @@ buffer_set_t * buffer_set_create(
 
     buffer_set->value_size = value_size;
     buffer_set->node_size = node_size;
-    buffer_set->cmp = cmp;
+    buffer_set->compar = compar;
     buffer_set->buffer = buffer;
     buffer_set->size = 0;
     buffer_set->root = NULL_IDX;
@@ -272,7 +276,7 @@ static struct insert_result_s _insert(
         if (idx == NULL_IDX)
         {
             // FIXME: resize
-            assert(0);
+            abort();
         }
 
         const size_t offs = (buffer_set->node_size * idx);
@@ -290,7 +294,7 @@ static struct insert_result_s _insert(
     else
     {
         struct node_s * node = _get_node(buffer_set, idx);
-        int cmp = buffer_set->cmp(value, _get_node_value(node));
+        int cmp = buffer_set->compar(value, _get_node_value(node));
         if (cmp < 0)
         {
             const struct insert_result_s insert_result = _insert(buffer_set, value, node->left, inserted_idx);
@@ -374,6 +378,11 @@ void * buffer_set_insert(
     return _get_node_value(node);
 }
 
+size_t buffer_set_get_size(buffer_set_t * buffer_set)
+{
+    return buffer_set->size;
+}
+
 void * buffer_set_get(
     buffer_set_t * buffer_set,
     const void * value
@@ -384,7 +393,7 @@ void * buffer_set_get(
         if (idx == NULL_IDX)
             return NULL;
         struct node_s * node = _get_node(buffer_set, idx);
-        const int cmp = buffer_set->cmp(value, _get_node_value(node));
+        const int cmp = buffer_set->compar(value, _get_node_value(node));
         if (cmp < 0)
             idx = node->left;
         else if (cmp > 0)
@@ -413,7 +422,7 @@ static struct erase_result_s _erase(
     uint16_t * erased_idx
 ) {
     struct node_s * node = _get_node(buffer_set, idx);
-    int cmp = buffer_set->cmp(value, _get_node_value(node));
+    int cmp = buffer_set->compar(value, _get_node_value(node));
     if (cmp < 0)
     {
         if (node->left == NULL_IDX)
