@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 4.0)
 
 project(buffer_set)
 
@@ -11,11 +11,15 @@ set(LIB_SRCS
     src/buffer_set.c
 )
 
-add_library(buffer_set SHARED ${LIB_SRCS})
-target_compile_definitions(buffer_set PRIVATE BUILDING_BUFFER_SET_DLL)
+add_library(buffer_set STATIC ${LIB_SRCS})
 
 if(BUILD_TESTS)
-    set(TEST_SRCS tests/main.c)
+    set(TEST_SRCS
+        tests/main.c
+        tests/max_capacity.c
+        tests/random_op.c
+        tests/reg.c
+    )
 
     add_executable(buffer_set_tests ${TEST_SRCS})
     add_dependencies(buffer_set_tests buffer_set)

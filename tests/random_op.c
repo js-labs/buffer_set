@@ -7,31 +7,6 @@
 
 #define OPERATIONS 100
 
-static int int_cmp(const void * pv1, const void * pv2)
-{
-    const int v1 = *((const int*) pv1);
-    const int v2 = *((const int*) pv2);
-    if (v1 < v2)
-        return -1;
-    else if (v2 < v1)
-        return 1;
-    else
-        return 0;
-}
-
-typedef enum
-{
-    operation_type_insert,
-    operation_type_erase
-}
-operation_type_t;
-
-struct operation_s
-{
-    operation_type_t operation_type;
-    int value;
-};
-
 struct golden_set_s
 {
     size_t capacity;
@@ -95,16 +70,40 @@ static void golden_set_destroy(struct golden_set_s * golden_set)
     free(golden_set);
 }
 
-struct check_context_s
+struct validation_context_s
 {
-    struct golden_set_s * golden_set;
+    const struct golden_set_s * golden_set;
+    const struct operation_s * history;
     char * error_message;
 };
 
-static int check_callback(const void * value, void * arg)
+static void print_operations(const struct operation_s * operations, size_t count)
 {
-    struct check_context_s * check_context = (struct check_context_s*) arg;
-    struct golden_set_s * golden_set = (struct golden_set_s*) check_context->golden_set;
+    printf("\n");
+    printf("static const struct operation_s operations[] =\n");
+    printf("{\n");
+    for (size_t idx=0; idx<count; idx++)
+    {
+        const struct operation_s * operation = &operations[idx];
+        const char * operation_type;
+        switch (operation->type)
+        {
+            case operation_type_insert:
+                operation_type = "operation_type_insert";
+                break;
+            case operation_type_erase:
+                operation_type = "operation_type_erase";
+                break;
+        }
+        printf("    { %s, %d }\n", operation_type, operation->value);
+    }
+    printf("}\n");
+}
+
+static int validation_callback(const void * value, void * arg)
+{
+    struct validation_context_s * validation_context = (struct validation_context_s*) arg;
+    struct golden_set_s * golden_set = (struct golden_set_s*) validation_context->golden_set;
     const void * ptr = bsearch(value, golden_set->data, golden_set->size, sizeof(int), int_cmp);
     if (ptr)
         return 0;
@@ -112,14 +111,15 @@ static int check_callback(const void * value, void * arg)
     {
         char buffer[128];
         sprintf(buffer, "value %d not found in the golden set", *((const int*)value));
-        check_context->error_message = strdup(buffer);
+        validation_context->error_message = strdup(buffer);
+        print_operations(validation_context->history, OPERATIONS);
         return -1;
     }
 }
 
 char * random_op()
 {
-    size_t capacity = (OPERATIONS / 10 * 7);
+    size_t capacity = (OPERATIONS / 2);
     if (capacity < 16)
         capacity = 16;
 
@@ -136,19 +136,22 @@ char * random_op()
 
     buffer_set_t * buffer_set = buffer_set_create(sizeof(int), capacity, int_cmp);
     char * ret = NULL;
+    int insert_count = 0;
+    int erase_count = 0;
 
     srand((unsigned int) time(NULL));
 
     for (int idx=0; idx<OPERATIONS; idx++)
     {
-        // Distribute insert operations at 60% for growing
+        // Distribute insert operations at 75% for growing
         const int rnd = rand();
-        const operation_type_t operation_type = (rnd > (RAND_MAX/10*6))
+        const operation_type_t operation_type = (rnd < (RAND_MAX/ 100 * 75))
             ? operation_type_insert
             : operation_type_erase;
 
         if (operation_type == operation_type_insert)
         {
+            insert_count++;
             int value = rand();
             for (;;)
             {
@@ -160,10 +163,8 @@ char * random_op()
 
             if (golden_set_add(golden_set, value) != 0)
             {
-                buffer_set_destroy(buffer_set);
-                golden_set_destroy(golden_set);
-                free(history);
-                return NOT_ENOUGH_MEMORY;
+                ret = NOT_ENOUGH_MEMORY;
+                break;
             }
 
             const struct operation_s operation = { operation_type_insert, value };
@@ -176,20 +177,70 @@ char * random_op()
                 char buffer[128];
                 sprintf(buffer, "unexpected duplicate %d", value);
                 ret = strdup(buffer);
+                print_operations(history, idx+1);
                 break;
             }
             *((int*)ptr) = value;
+
+            /*
+            printf("*** inserted %d\n", value);
+            buffer_set_print_debug(buffer_set, stdout, int_printer);
+            printf("\n");
+            */
         }
         else
         {
+            if (golden_set->size == 0)
+                continue;
+            if (golden_set->size > RAND_MAX)
+                abort(); // FIXME
+
+            erase_count++;
+
+            size_t value_idx = rand();
+            value_idx %= golden_set->size;
+            const int value = golden_set->data[value_idx];
+            golden_set->size--;
+            const size_t move_size = (golden_set->size - value_idx) * sizeof(int);
+            if (move_size > 0)
+                memmove(&golden_set->data[value_idx], &golden_set->data[value_idx+1], move_size);
+
+            const struct operation_s operation = { operation_type_erase, value };
+            history[idx] = operation;
+
+            const void * erased_ptr = buffer_set_erase(buffer_set, &value);
+            if (!erased_ptr)
+            {
+                char buffer[128];
+                sprintf(buffer, "failed to erase value %d", value);
+                ret = strdup(buffer);
+                print_operations(history, idx+1);
+                break;
+            }
+
+            const int erased_value = *((const int*)erased_ptr);
+            if (erased_value != value)
+            {
+                char buffer[128];
+                sprintf(buffer, "erased value unexpectedly %d instead of %d", erased_value, value);
+                ret = strdup(buffer);
+                print_operations(history, idx+1);
+                break;
+            }
+
+            /*
+            printf("*** erased %d\n", value);
+            buffer_set_print_debug(buffer_set, stdout, int_printer);
+            printf("\n");
+            */
         }
     }
 
     if (!ret)
     {
-        struct check_context_s check_context = { golden_set, NULL };
-        buffer_set_for_each(buffer_set, check_callback, &check_context);
-        ret = check_context.error_message;
+        struct validation_context_s validation_context = { golden_set, history, NULL };
+        buffer_set_for_each(buffer_set, validation_callback, &validation_context);
+        ret = validation_context.error_message;
         if (!ret)
         {
             for (size_t idx=0; idx<golden_set->size; idx++)
@@ -201,11 +252,15 @@ char * random_op()
                     char buffer[128];
                     sprintf(buffer, "value %d not found in the buffer set", value);
                     ret = strdup(buffer);
+                    print_operations(history, OPERATIONS);
                     break;
                 }
             }
         }
     }
+
+    if (!ret)
+        printf(": %d values inserted, %d erased\n", insert_count, erase_count);
 
     buffer_set_destroy(buffer_set);
     golden_set_destroy(golden_set);

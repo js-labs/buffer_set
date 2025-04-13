@@ -1,78 +1,61 @@
+/*
+ * Copyright (C) 2025 Sergey Zubarev, info@js-labs.org
+ */
+
 #include <buffer_set/buffer_set.h>
 #include <stdlib.h>
 #include "test.h"
 
-static void debug_value_printer(FILE * file, const void * value)
+int int_cmp(const void * pv1, const void * pv2)
 {
-    const int v = *((const int*) value);
-    fprintf(file, "%d", v);
+    const int v1 = *((const int*) pv1);
+    const int v2 = *((const int*) pv2);
+    if (v1 < v2)
+        return -1;
+    else if (v2 < v1)
+        return 1;
+    else
+        return 0;
+}
+
+void int_printer(FILE * file, const void * value)
+{
+    fprintf(file, "%d", *((const int*) value));
 }
 
 // Tests
+char * max_capacity();
 char * random_op();
+char * reg();
 
-struct failed_test_s
-{
-    struct  failed_test_s * next;
-    const char * name;
-    char * error_message;
-};
-
-static struct failed_test_s * run_test(
-    struct failed_test_s * failed_tests,
+void run_test(
+    int * failed_tests,
     const char * name,
     char * (*test_func)()
 ) {
-    printf("[ RUN    ] %s\n", name);
+    printf("[ RUN    ] %s", name);
     char * error_message = (*test_func)();
     if (error_message)
     {
-        printf("[ FAILED ] %s\n", name);
-        struct failed_test_s * ft = malloc(sizeof(struct failed_test_s));
-        ft->next = failed_tests;
-        ft->name = name;
-        ft->error_message = error_message;
-        return ft;
+        printf("[ FAILED ] %s: %s\n", name, error_message);
+        free(error_message);
+        (*failed_tests)++;
     }
     else
-    {
         printf("[     OK ] %s\n", name);
-        return failed_tests;
-    }
 }
 
 int main(int argc, const char * argv[])
 {
-    struct failed_test_s * failed_tests = NULL;
+    int failed_tests = 0;
 
-#define RUN_TEST(name) failed_tests = run_test(failed_tests, #name, name)
+#define RUN_TEST(name) run_test(&failed_tests, #name, name)
 
+    RUN_TEST(max_capacity);
     RUN_TEST(random_op);
+    //RUN_TEST(reg);
 
 #undef RUN_TEST
 
-    if (failed_tests == NULL)
-        return 0;
-
-    printf("Failed tests:\n");
-    struct failed_test_s * ft = failed_tests;
-    for (;;)
-    {
-        struct failed_test_s * next = failed_tests->next;
-
-        printf("%s: ", ft->name);
-        if (ft->error_message == NOT_ENOUGH_MEMORY)
-            printf("not enough memory\n");
-        else
-        {
-            printf(ft->error_message);
-            free(ft->error_message);
-        }
-        free(ft);
-        if (next == NULL)
-            break;
-        ft = next;
-    }
-
-    return -1;
+    return failed_tests ? -1 : 0;
 }

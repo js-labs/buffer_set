@@ -9,6 +9,7 @@
 #include <string.h>
 
 #define NULL_IDX ((uint16_t)0xFFFF)
+#define MAX_CAPACITY ((uint16_t)0xFFFE)
 
 struct node_s
 {
@@ -27,9 +28,10 @@ struct buffer_set_s
     size_t value_size;
     size_t node_size;
     int (*compar)(const void * v1, const void * v2);
-    void * buffer;
+    uint16_t capacity;
     uint16_t size;
     uint16_t root;
+    void * buffer;
     uint16_t free_list;
 };
 
@@ -54,50 +56,64 @@ static inline void * _get_node_value(struct node_s * node)
     return ((char*)node) + _round(sizeof(struct node_s));
 }
 
-static uint16_t _buffer_set_make_free_list(void * buffer, size_t node_size, size_t count)
+static uint16_t _make_free_list(void * buffer, size_t node_size, uint16_t first_idx, uint16_t count)
 {
-    for (int16_t idx=0;;)
+    struct free_node_s * free_node = (struct free_node_s*) (((char*)buffer) + (node_size * first_idx));
+    uint16_t idx = first_idx;
+    for (;;)
     {
-        struct free_node_s * free_node = (struct free_node_s*) (((char*)buffer) + (node_size * idx));
         if (--count == 0)
         {
             free_node->next = NULL_IDX;
-            return 0;
+            return first_idx;
         }
         else
         {
             idx++;
             free_node->next = idx;
+            free_node = (struct free_node_s*) (((char*)free_node) + node_size);
         }
     }
 }
 
 buffer_set_t * buffer_set_create(
     size_t value_size,
-    size_t capacity,
+    uint16_t capacity,
     int (*compar)(const void * v1, const void * v2)
 ) {
+    if (capacity > MAX_CAPACITY)
+        return NULL;
+
     struct buffer_set_s * buffer_set = malloc(sizeof(struct buffer_set_s));
     if (buffer_set == NULL)
         return NULL;
 
     const size_t node_size = _round(sizeof(struct node_s)) + _round(value_size);
 
-    const size_t buffer_size = (node_size * capacity);
-    void * buffer = malloc(buffer_size);
-    if (buffer == NULL)
-    {
-        free(buffer_set);
-        return NULL;
-    }
-
     buffer_set->value_size = value_size;
     buffer_set->node_size = node_size;
     buffer_set->compar = compar;
-    buffer_set->buffer = buffer;
+    buffer_set->capacity = capacity;
     buffer_set->size = 0;
     buffer_set->root = NULL_IDX;
-    buffer_set->free_list = _buffer_set_make_free_list(buffer, node_size, capacity);
+
+    if (capacity > 0)
+    {
+        const size_t buffer_size = (node_size * capacity);
+        void * buffer = malloc(buffer_size);
+        if (!buffer)
+        {
+            free(buffer_set);
+            return NULL;
+        }
+        buffer_set->buffer = buffer;
+        buffer_set->free_list = _make_free_list(buffer, node_size, 0, capacity);
+    }
+    else
+    {
+        buffer_set->buffer = NULL;
+        buffer_set->free_list = NULL_IDX;
+    }
 
     return buffer_set;
 }
@@ -250,12 +266,15 @@ static struct rebalance_result_s _balance_right(
     }
 }
 
-#define INSERTED 0x10000
-
 struct insert_result_s
 {
     uint16_t idx;
     uint16_t height_changed;
+};
+
+struct value_node_s {
+    uint16_t idx;
+    uint16_t new_node;
 };
 
 static struct insert_result_s _make_insert_result(uint16_t idx, uint16_t height_changed)
@@ -264,19 +283,80 @@ static struct insert_result_s _make_insert_result(uint16_t idx, uint16_t height_
     return insert_result;
 }
 
+static inline uint16_t _round_up_power_of_2(uint16_t value)
+{
+    value--;
+    value |= (value >> 1);
+    value |= (value >> 2);
+    value |= (value >> 4);
+    value |= (value >> 8);
+    value++;
+    return value;
+}
+
+static uint16_t _calculate_new_capacity(uint16_t capacity)
+{
+    if (capacity < 16)
+        return 16;
+
+    if (capacity < 1024)
+    {
+        // double the capacity while it is less than 1024
+        uint16_t new_capacity = _round_up_power_of_2(capacity);
+        if (new_capacity != capacity)
+            return new_capacity;
+        new_capacity *= 2;
+        return new_capacity;
+    }
+
+    const uint16_t remainder = (capacity % 1024);
+    uint16_t new_capacity = (capacity - remainder);
+    if ((MAX_CAPACITY - new_capacity) < 1024)
+        return MAX_CAPACITY;
+    new_capacity += 1024;
+    return new_capacity;
+}
+
 static struct insert_result_s _insert(
     struct buffer_set_s * buffer_set,
     const void * value,
     uint16_t idx,
-    uint32_t * inserted_idx
+    struct value_node_s * value_node
 ) {
     if (idx == NULL_IDX)
     {
         idx = buffer_set->free_list;
         if (idx == NULL_IDX)
         {
-            // FIXME: resize
-            abort();
+            assert(buffer_set->size == buffer_set->capacity);
+            if (buffer_set->capacity == MAX_CAPACITY)
+            {
+                value_node->idx = NULL_IDX;
+                return _make_insert_result(0, 0);
+            }
+
+            const uint16_t new_capacity = _calculate_new_capacity(buffer_set->capacity);
+            void * buffer = malloc(new_capacity * buffer_set->node_size);
+            if (!buffer)
+            {
+                value_node->idx = NULL_IDX;
+                return _make_insert_result(0, 0);
+            }
+
+            memcpy(buffer, buffer_set->buffer, buffer_set->size * buffer_set->node_size);
+            free(buffer_set->buffer);
+
+            buffer_set->capacity = new_capacity;
+            buffer_set->buffer = buffer;
+
+            buffer_set->free_list = _make_free_list(
+                buffer,
+                buffer_set->node_size,
+                buffer_set->size,
+                (new_capacity - buffer_set->size)
+            );
+
+            idx = buffer_set->free_list;
         }
 
         const size_t offs = (buffer_set->node_size * idx);
@@ -288,7 +368,8 @@ static struct insert_result_s _insert(
         node->right = NULL_IDX;
         node->balance = 0;
 
-        *inserted_idx = (((uint32_t)idx) | INSERTED);
+        value_node->idx = idx;
+        value_node->new_node = 1;
         return _make_insert_result(idx, 1);
     }
     else
@@ -297,7 +378,10 @@ static struct insert_result_s _insert(
         int cmp = buffer_set->compar(value, _get_node_value(node));
         if (cmp < 0)
         {
-            const struct insert_result_s insert_result = _insert(buffer_set, value, node->left, inserted_idx);
+            const struct insert_result_s insert_result = _insert(buffer_set, value, node->left, value_node);
+            if (value_node->idx == NULL_IDX)
+                return insert_result;
+
             node = _get_node(buffer_set, idx);
             node->left = insert_result.idx;
             if (insert_result.height_changed)
@@ -322,7 +406,10 @@ static struct insert_result_s _insert(
         }
         else if (cmp > 0)
         {
-            const struct insert_result_s insert_result = _insert(buffer_set, value, node->right, inserted_idx);
+            const struct insert_result_s insert_result = _insert(buffer_set, value, node->right, value_node);
+            if (value_node->idx == NULL_IDX)
+                return insert_result;
+
             node = _get_node(buffer_set, idx);
             node->right = insert_result.idx;
             if (insert_result.height_changed)
@@ -347,7 +434,8 @@ static struct insert_result_s _insert(
         }
         else
         {
-            *inserted_idx = idx;
+            value_node->idx = idx;
+            value_node->new_node = 0;
             return _make_insert_result(idx, 0);
         }
     }
@@ -358,23 +446,26 @@ void * buffer_set_insert(
     const void * value,
     int * inserted
 ) {
-    uint32_t inserted_idx;
+    struct value_node_s value_node;
     const struct insert_result_s insert_result = _insert(
         buffer_set,
         value,
         buffer_set->root,
-        &inserted_idx
+        &value_node
     );
+
+    if (value_node.idx == NULL_IDX)
+        return NULL;
+
     buffer_set->root = insert_result.idx;
 
-    if (inserted_idx & INSERTED)
+    if (value_node.new_node)
     {
         *inserted = 1;
         buffer_set->size++;
     }
 
-    const uint16_t idx = (uint16_t) (inserted_idx & 0xFFFF);
-    struct node_s * node = _get_node(buffer_set, idx);
+    struct node_s * node = _get_node(buffer_set, value_node.idx);
     return _get_node_value(node);
 }
 
@@ -421,15 +512,18 @@ static struct erase_result_s _erase(
     uint16_t idx,
     uint16_t * erased_idx
 ) {
+    if (idx == NULL_IDX)
+    {
+        *erased_idx = NULL_IDX;
+        return _make_erase_result(NULL_IDX, 0);
+    }
+
     struct node_s * node = _get_node(buffer_set, idx);
     int cmp = buffer_set->compar(value, _get_node_value(node));
     if (cmp < 0)
     {
-        if (node->left == NULL_IDX)
-            return _make_erase_result(NULL_IDX, 0);
-
         const struct erase_result_s erase_result = _erase(buffer_set, value, node->left, erased_idx);
-        if (erase_result.idx == NULL_IDX)
+        if (*erased_idx == NULL_IDX)
             return erase_result;
 
         node = _get_node(buffer_set, idx);
@@ -453,11 +547,8 @@ static struct erase_result_s _erase(
     }
     else if (cmp > 0)
     {
-        if (node->right == NULL_IDX)
-            return _make_erase_result(NULL_IDX, 0);
-
         const struct erase_result_s erase_result = _erase(buffer_set, value, node->right, erased_idx);
-        if (erase_result.idx == NULL_IDX)
+        if (*erased_idx == NULL_IDX)
             return erase_result;
 
         node = _get_node(buffer_set, idx);
@@ -509,6 +600,7 @@ static struct erase_result_s _erase(
                 if (tmp->left == NULL_IDX)
                     break;
                 tmp_idx = tmp->left;
+                tmp = _get_node(buffer_set, tmp_idx);
             }
 
             const struct erase_result_s erase_result = _erase(buffer_set, _get_node_value(tmp), node->right, erased_idx);
@@ -539,10 +631,9 @@ static struct erase_result_s _erase(
     }
 }
 
-int buffer_set_erase(
+const void * buffer_set_erase(
     buffer_set_t * buffer_set,
-    const void * value,
-    void * erased_value
+    const void * value
 ) {
     uint16_t erased_idx;
     const struct erase_result_s erase_result = _erase(
@@ -552,18 +643,19 @@ int buffer_set_erase(
         &erased_idx
     );
 
-    if (erase_result.idx == NULL_IDX)
-        return 0;
+    if (erased_idx == NULL_IDX)
+        return NULL; // not found
+
+    assert(buffer_set->size > 0);
+    buffer_set->size--;
+    buffer_set->root = erase_result.idx;
 
     struct node_s * node = _get_node(buffer_set, erased_idx);
-    if (erased_value != NULL)
-        memcpy(erased_value, _get_node_value(node), buffer_set->value_size);
-
     struct free_node_s * free_node = (struct free_node_s*) node;
     free_node->next = buffer_set->free_list;
     buffer_set->free_list = erased_idx;
 
-    return 1;
+    return _get_node_value(node);
 }
 
 struct for_each_context_s
