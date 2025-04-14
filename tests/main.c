@@ -1,5 +1,16 @@
 /*
- * Copyright (C) 2025 Sergey Zubarev, info@js-labs.org
+ * This file is part of BUFFER_SET library.
+ * Copyright (C) 2020 Sergey Zubarev, info@js-labs.org
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU Lesser General Public License for more details.
  */
 
 #include <buffer_set/buffer_set.h>
@@ -24,25 +35,21 @@ void int_printer(FILE * file, const void * value)
 }
 
 // Tests
-char * max_capacity();
-char * random_op();
-char * reg();
+int max_capacity();
+int random_op();
+int reg();
 
-void run_test(
-    int * failed_tests,
-    const char * name,
-    char * (*test_func)()
-) {
-    printf("[ RUN    ] %s", name);
-    char * error_message = (*test_func)();
-    if (error_message)
+void run_test(int * failed_tests, const char * name, int (*test_func)())
+{
+    printf("Run [%s]: ", name);
+    int rc = (*test_func)();
+    if (rc)
     {
-        printf("[ FAILED ] %s: %s\n", name, error_message);
-        free(error_message);
+        printf(" / FAILED\n");
         (*failed_tests)++;
     }
     else
-        printf("[     OK ] %s\n", name);
+        printf(" / OK\n");
 }
 
 int main(int argc, const char * argv[])

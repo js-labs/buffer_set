@@ -1,3 +1,18 @@
+/*
+ * This file is part of BUFFER_SET library.
+ * Copyright (C) 2020 Sergey Zubarev, info@js-labs.org
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU Lesser General Public License for more details.
+ */
+
 #include <buffer_set/buffer_set.h>
 #include <stdlib.h>
 #include <time.h>
@@ -5,7 +20,7 @@
 #include <string.h>
 #include "test.h"
 
-#define OPERATIONS 100
+#define OPERATIONS 1000
 
 struct golden_set_s
 {
@@ -17,7 +32,7 @@ struct golden_set_s
 struct golden_set_s * golden_set_create(size_t capacity)
 {
     struct golden_set_s * golden_set = malloc(sizeof(struct golden_set_s));
-    if (golden_set == NULL)
+    if (!golden_set)
         return NULL;
     golden_set->capacity = capacity;
     golden_set->size = 0;
@@ -70,13 +85,6 @@ static void golden_set_destroy(struct golden_set_s * golden_set)
     free(golden_set);
 }
 
-struct validation_context_s
-{
-    const struct golden_set_s * golden_set;
-    const struct operation_s * history;
-    char * error_message;
-};
-
 static void print_operations(const struct operation_s * operations, size_t count)
 {
     printf("\n");
@@ -100,6 +108,13 @@ static void print_operations(const struct operation_s * operations, size_t count
     printf("}\n");
 }
 
+struct validation_context_s
+{
+    const struct golden_set_s * golden_set;
+    const struct operation_s * history;
+    int result;
+};
+
 static int validation_callback(const void * value, void * arg)
 {
     struct validation_context_s * validation_context = (struct validation_context_s*) arg;
@@ -109,33 +124,38 @@ static int validation_callback(const void * value, void * arg)
         return 0;
     else
     {
-        char buffer[128];
-        sprintf(buffer, "value %d not found in the golden set", *((const int*)value));
-        validation_context->error_message = strdup(buffer);
+        printf("value %d not found in the golden set", *((const int*)value));
         print_operations(validation_context->history, OPERATIONS);
+        validation_context->result = -1;
         return -1;
     }
 }
 
-char * random_op()
+int random_op()
 {
+    static const char * not_enough_memory = "not enough memory";
+
     size_t capacity = (OPERATIONS / 2);
     if (capacity < 16)
         capacity = 16;
 
     struct operation_s * history = malloc(sizeof(struct operation_s) * OPERATIONS);
-    if (history == NULL)
-        return NOT_ENOUGH_MEMORY;
+    if (!history)
+    {
+        printf("%s", not_enough_memory);
+        return -1;
+    }
 
     struct golden_set_s * golden_set = golden_set_create(capacity);
-    if (golden_set == NULL)
+    if (!golden_set)
     {
         free(history);
-        return NOT_ENOUGH_MEMORY;
+        printf("%s", not_enough_memory);
+        return -1;
     }
 
     buffer_set_t * buffer_set = buffer_set_create(sizeof(int), capacity, int_cmp);
-    char * ret = NULL;
+    int ret = 0;
     int insert_count = 0;
     int erase_count = 0;
 
@@ -155,15 +175,16 @@ char * random_op()
             int value = rand();
             for (;;)
             {
-                void * ptr = bsearch(&value, golden_set->data, golden_set->size, sizeof(int), int_cmp);
-                if (ptr == NULL)
+                const void * ptr = bsearch(&value, golden_set->data, golden_set->size, sizeof(int), int_cmp);
+                if (!ptr)
                     break;
                 value = rand();
             }
 
             if (golden_set_add(golden_set, value) != 0)
             {
-                ret = NOT_ENOUGH_MEMORY;
+                printf("%s", not_enough_memory);
+                ret = -1;
                 break;
             }
 
@@ -174,13 +195,25 @@ char * random_op()
             void * ptr = buffer_set_insert(buffer_set, &value, &inserted);
             if (!inserted)
             {
-                char buffer[128];
-                sprintf(buffer, "unexpected duplicate %d", value);
-                ret = strdup(buffer);
+                printf("unexpected duplicate %d", value);
                 print_operations(history, idx+1);
+                ret = -1;
                 break;
             }
             *((int*)ptr) = value;
+
+            const uint16_t buffer_set_size = buffer_set_get_size(buffer_set);
+            if (golden_set->size != buffer_set_size)
+            {
+                printf(
+                    "buffer set size %hu not equal to the golden set size %zu",
+                    buffer_set_size,
+                    golden_set->size
+                );
+                print_operations(history, idx+1);
+                ret = -1;
+                break;
+            }
 
             /*
             printf("*** inserted %d\n", value);
@@ -211,20 +244,31 @@ char * random_op()
             const void * erased_ptr = buffer_set_erase(buffer_set, &value);
             if (!erased_ptr)
             {
-                char buffer[128];
-                sprintf(buffer, "failed to erase value %d", value);
-                ret = strdup(buffer);
+                printf("failed to erase value %d", value);
                 print_operations(history, idx+1);
+                ret = -1;
                 break;
             }
 
             const int erased_value = *((const int*)erased_ptr);
             if (erased_value != value)
             {
-                char buffer[128];
-                sprintf(buffer, "erased value unexpectedly %d instead of %d", erased_value, value);
-                ret = strdup(buffer);
+                printf("erased value unexpectedly %d instead of %d", erased_value, value);
                 print_operations(history, idx+1);
+                ret = -1;
+                break;
+            }
+
+            const uint16_t buffer_set_size = buffer_set_get_size(buffer_set);
+            if (golden_set->size != buffer_set_size)
+            {
+                printf(
+                    "buffer set size %hu not equal to the golden set size %zu",
+                    buffer_set_size,
+                    golden_set->size
+                );
+                print_operations(history, idx+1);
+                ret = -1;
                 break;
             }
 
@@ -238,9 +282,9 @@ char * random_op()
 
     if (!ret)
     {
-        struct validation_context_s validation_context = { golden_set, history, NULL };
+        struct validation_context_s validation_context = { golden_set, history, 0 };
         buffer_set_for_each(buffer_set, validation_callback, &validation_context);
-        ret = validation_context.error_message;
+        ret = validation_context.result;
         if (!ret)
         {
             for (size_t idx=0; idx<golden_set->size; idx++)
@@ -249,10 +293,9 @@ char * random_op()
                 const void * ptr = buffer_set_get(buffer_set, &value);
                 if (!ptr)
                 {
-                    char buffer[128];
-                    sprintf(buffer, "value %d not found in the buffer set", value);
-                    ret = strdup(buffer);
+                    printf("value %d not found in the buffer set", value);
                     print_operations(history, OPERATIONS);
+                    ret = -1;
                     break;
                 }
             }
@@ -260,7 +303,7 @@ char * random_op()
     }
 
     if (!ret)
-        printf(": %d values inserted, %d erased\n", insert_count, erase_count);
+        printf("%d values inserted, %d erased", insert_count, erase_count);
 
     buffer_set_destroy(buffer_set);
     golden_set_destroy(golden_set);

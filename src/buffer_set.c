@@ -1,6 +1,16 @@
 /*
- * Copyright (C) 2025 Sergey Zubarev, info@js-labs.org
+ * This file is part of BUFFER_SET library.
+ * Copyright (C) 2020 Sergey Zubarev, info@js-labs.org
  *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU Lesser General Public License for more details.
  */
 
 #include <buffer_set/buffer_set.h>
@@ -469,7 +479,7 @@ void * buffer_set_insert(
     return _get_node_value(node);
 }
 
-size_t buffer_set_get_size(buffer_set_t * buffer_set)
+uint16_t buffer_set_get_size(buffer_set_t * buffer_set)
 {
     return buffer_set->size;
 }
@@ -646,6 +656,8 @@ const void * buffer_set_erase(
     if (erased_idx == NULL_IDX)
         return NULL; // not found
 
+    // FIXME: It may be worth reducing the buffer size
+    // if there is a significant amount of free space.
     assert(buffer_set->size > 0);
     buffer_set->size--;
     buffer_set->root = erase_result.idx;

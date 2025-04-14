@@ -1,3 +1,18 @@
+/*
+ * This file is part of BUFFER_SET library.
+ * Copyright (C) 2020 Sergey Zubarev, info@js-labs.org
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU Lesser General Public License for more details.
+ */
+
 #include <buffer_set/buffer_set.h>
 #include <stdlib.h>
 #include "test.h"
@@ -10,11 +25,14 @@ static const struct operation_s operations[] =
     { operation_type_erase,   6 }
 };
 
-char * reg()
+int reg()
 {
     buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 16, int_cmp);
     if (!buffer_set)
-        return NOT_ENOUGH_MEMORY;
+    {
+        printf("not enough memory");
+        return -1;
+    }
 
     int inserted;
     void * ptr;
@@ -40,5 +58,5 @@ char * reg()
     }
 
     buffer_set_destroy(buffer_set);
-    return NULL;
+    return 0;
 }

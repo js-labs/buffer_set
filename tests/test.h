@@ -1,9 +1,22 @@
+/*
+ * This file is part of BUFFER_SET library.
+ * Copyright (C) 2020 Sergey Zubarev, info@js-labs.org
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU Lesser General Public License for more details.
+ */
+
 #if !defined(BUFFER_SET_TEST_H)
 #define BUFFER_SET_TEST_H
 
 #include <stdio.h>
-
-#define NOT_ENOUGH_MEMORY ((void*)1)
 
 typedef enum
 {
