@@ -35,6 +35,7 @@ void int_printer(FILE * file, const void * value)
 }
 
 // Tests
+int insert();
 int max_capacity();
 int random_op();
 int reg();
@@ -49,20 +50,27 @@ void run_test(int * failed_tests, const char * name, int (*test_func)())
         (*failed_tests)++;
     }
     else
-        printf(" / OK\n");
+        printf(" / PASSED\n");
 }
 
 int main(int argc, const char * argv[])
 {
     int failed_tests = 0;
+    int tests = 0;
 
-#define RUN_TEST(name) run_test(&failed_tests, #name, name)
+#define RUN_TEST(name) run_test(&failed_tests, #name, name); tests++
 
+    RUN_TEST(insert);
     RUN_TEST(max_capacity);
     RUN_TEST(random_op);
     //RUN_TEST(reg);
 
 #undef RUN_TEST
-
-    return failed_tests ? -1 : 0;
+    if (failed_tests > 0)
+    {
+        printf("%d out of %d tests failed\n", failed_tests, tests);
+        return -1;
+    }
+    else
+        return 0;
 }

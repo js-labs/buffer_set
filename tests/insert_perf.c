@@ -14,44 +14,49 @@
  */
 
 #include <buffer_set/buffer_set.h>
+#include <sys/time.h>
 #include <stdlib.h>
-#include <string.h>
-#include "test.h"
 
-int max_capacity()
+static int int_cmp(const void * pv1, const void * pv2)
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 0, int_cmp);
+    const int v1 = *((const int*) pv1);
+    const int v2 = *((const int*) pv2);
+    if (v1 < v2)
+        return -1;
+    else if (v2 < v1)
+        return 1;
+    else
+        return 0;
+}
+
+#define COUNT (10*1000)
+
+int main(int argc, const char * argv[])
+{
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT, int_cmp);
     if (buffer_set == NULL)
     {
         printf("not enough memory");
         return -1;
     }
 
-    int ret = 0;
+    struct timeval tv_start;
+    gettimeofday(&tv_start, NULL);
 
-    for (int idx=0; idx<0xFFFE; idx++)
+    for (int idx=0; idx<COUNT; idx++)
     {
         int inserted;
         void * ptr = buffer_set_insert(buffer_set, &idx, &inserted);
-        if (!ptr)
-        {
-            printf("buffer_set_insert() unexpectedly returned NULL for %d", idx);
-            ret = -1;
-            break;
-        }
         *((int*)ptr) = idx;
     }
 
-    int inserted;
-    int value = 0xFFFF;
-    void * ptr = buffer_set_insert(buffer_set, &value, &inserted);
-    if (ptr)
-    {
-        printf("buffer_set_insert() unexpectedly returned non NULL value");
-        ret = -1;
-    }
+    struct timeval tv_end;
+    gettimeofday(&tv_end, NULL);
+
+    const unsigned int delay = ((tv_end.tv_sec - tv_start.tv_sec) * 1000000 + tv_end.tv_usec - tv_start.tv_usec);
+    printf("inserted values [0...%u] @ %u usec\n", COUNT-1, delay);
 
     buffer_set_destroy(buffer_set);
 
-    return ret;
+    return 0;
 }

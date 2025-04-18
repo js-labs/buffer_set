@@ -31,6 +31,30 @@ buffer_set_t * buffer_set_create(
     int (*compar)(const void * v1, const void * v2)
 );
 
+/**
+ * Inserts a value into the set.
+ *
+ * @return
+ * A pointer to the value in the set, or NULL if
+ * an error occurred (e.g., memory allocation failure).
+ *
+ * @note
+ * The function uses the provided value only for searching within the buffer set. 
+ * If the value does not exist in the set, a new node will be allocated from the buffer,
+ * but it is the caller's responsibility to properly initialize the value.
+ *
+ * For example, if the buffer set is intended to store integers, the insertion 
+ * should be performed as follows:
+ *
+ *    int value = 42;
+ *    int inserted;
+ *    void *ptr = buffer_set_insert(buffer_set, &value, &inserted);
+ *    if (inserted) {
+ *        *((int *)ptr) = value;
+ *    }
+ *
+ * The address of the value inside the buffer is always aligned to the size of a pointer.
+ */
 void * buffer_set_insert(
     buffer_set_t * buffer_set,
     const void * value,

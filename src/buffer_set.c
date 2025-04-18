@@ -282,7 +282,8 @@ struct insert_result_s
     uint16_t height_changed;
 };
 
-struct value_node_s {
+struct value_node_s
+{
     uint16_t idx;
     uint16_t new_node;
 };
@@ -474,6 +475,8 @@ void * buffer_set_insert(
         *inserted = 1;
         buffer_set->size++;
     }
+    else
+        *inserted = 0;
 
     struct node_s * node = _get_node(buffer_set, value_node.idx);
     return _get_node_value(node);
@@ -529,7 +532,7 @@ static struct erase_result_s _erase(
     }
 
     struct node_s * node = _get_node(buffer_set, idx);
-    int cmp = buffer_set->compar(value, _get_node_value(node));
+    const int cmp = buffer_set->compar(value, _get_node_value(node));
     if (cmp < 0)
     {
         const struct erase_result_s erase_result = _erase(buffer_set, value, node->left, erased_idx);

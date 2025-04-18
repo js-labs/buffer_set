@@ -18,7 +18,7 @@
 #include <string.h>
 #include "test.h"
 
-int max_capacity()
+int insert()
 {
     buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 0, int_cmp);
     if (buffer_set == NULL)
@@ -27,28 +27,34 @@ int max_capacity()
         return -1;
     }
 
+    int value = 42;
+    int inserted = 0;
+    void * ptr1 = buffer_set_insert(buffer_set, &value, &inserted);
+    *((int*)ptr1) = value;
     int ret = 0;
 
-    for (int idx=0; idx<0xFFFE; idx++)
+    if (inserted == 0)
     {
-        int inserted;
-        void * ptr = buffer_set_insert(buffer_set, &idx, &inserted);
-        if (!ptr)
-        {
-            printf("buffer_set_insert() unexpectedly returned NULL for %d", idx);
-            ret = -1;
-            break;
-        }
-        *((int*)ptr) = idx;
-    }
-
-    int inserted;
-    int value = 0xFFFF;
-    void * ptr = buffer_set_insert(buffer_set, &value, &inserted);
-    if (ptr)
-    {
-        printf("buffer_set_insert() unexpectedly returned non NULL value");
+        printf("unexpected 'inserted' result: %d, it should be non-zero", inserted);
         ret = -1;
+    }
+    else
+    {
+        inserted = 1;
+        void * ptr2 = buffer_set_insert(buffer_set, &value, &inserted);
+        if (inserted == 0)
+        {
+            if (ptr1 != ptr2)
+            {
+                printf("different value address on update");
+                ret = -1;
+            }
+        }
+        else
+        {
+            printf("unexpected 'inserted' result: %d, it should be zero", inserted);
+            ret = -1;
+        }
     }
 
     buffer_set_destroy(buffer_set);
