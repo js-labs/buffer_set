@@ -18,6 +18,11 @@
 
 #define COUNT (10*1000)
 
+static unsigned int elapsed_time(struct timeval start, struct timeval end)
+{
+    return ((end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec);
+}
+
 int main(int argc, const char * argv[])
 {
     std::set<int> set;
@@ -31,8 +36,7 @@ int main(int argc, const char * argv[])
     struct timeval tv_end;
     gettimeofday(&tv_end, NULL);
 
-    const unsigned int delay = ((tv_end.tv_sec - tv_start.tv_sec) * 1000000 + tv_end.tv_usec - tv_start.tv_usec);
-    printf("inserted values [0...%u] \(%zu) @ %u usec\n", COUNT-1, set.size(), delay);
+    printf("inserted values [0...%u] @ %u usec\n", COUNT-1, elapsed_time(tv_start, tv_end));
 
     return 0;
 }

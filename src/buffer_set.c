@@ -183,6 +183,8 @@ static struct rebalance_result_s _balance_left(
         node->left = _rotate_left(buffer_set, node->left, left);
         const uint16_t nr_idx = _rotate_right(buffer_set, idx, node);
         struct node_s * nr = _get_node(buffer_set, nr_idx);
+        assert((nr->balance >= -1) && (nr->balance <= 1));
+        /*
         if (nr->balance == -1)
         {
             left->balance = 0;
@@ -196,11 +198,14 @@ static struct rebalance_result_s _balance_left(
         }
         else
         {
-            assert(nr->balance == 1);
             left->balance = -1;
             node->balance = 0;
             nr->balance = 0;
         }
+        */
+        left->balance = (nr->balance == 1) ? -1 : 0;
+        node->balance = (nr->balance == -1) ? 1 : 0;
+        nr->balance = 0;
         return _make_rebalance_result(nr_idx, 0);
     }
     else
@@ -235,6 +240,8 @@ static struct rebalance_result_s _balance_right(
         node->right = _rotate_right(buffer_set, node->right, right);
         const uint16_t nr_idx = _rotate_left(buffer_set, idx, node);
         struct node_s * nr = _get_node(buffer_set, nr_idx);
+        assert((nr->balance >= -1) && (nr->balance <= 1));
+        /*
         if (nr->balance == 1)
         {
             right->balance = 0;
@@ -248,11 +255,14 @@ static struct rebalance_result_s _balance_right(
         }
         else
         {
-            assert(nr->balance == -1);
             right->balance = 1;
             node->balance = 0;
             nr->balance = 0;
         }
+        */
+        right->balance = (nr->balance == -1) ? 1 : 0;
+        node->balance = (nr->balance == 1) ? -1 : 0;
+        nr->balance = 0;
         return _make_rebalance_result(nr_idx, 0);
     }
     else
@@ -763,7 +773,7 @@ static void _print_debug(
 void buffer_set_print_debug(
     const buffer_set_t * buffer_set,
     FILE * file,
-	void (*value_printer)(FILE * file, const void * value)
+    void (*value_printer)(FILE * file, const void * value)
 ) {
     fprintf(file, "{");
     const uint16_t root = buffer_set->root;
