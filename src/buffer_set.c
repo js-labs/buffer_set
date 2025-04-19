@@ -25,7 +25,7 @@ struct node_s
 {
     uint16_t left;
     uint16_t right;
-    int16_t balance;
+    int8_t balance;
 };
 
 struct free_node_s
@@ -181,8 +181,8 @@ static struct rebalance_result_s _balance_left(
     if (left->balance == 1)
     {
         node->left = _rotate_left(buffer_set, node->left, left);
-        idx = _rotate_right(buffer_set, idx, node);
-        struct node_s * nr = _get_node(buffer_set, idx);
+        const uint16_t nr_idx = _rotate_right(buffer_set, idx, node);
+        struct node_s * nr = _get_node(buffer_set, nr_idx);
         if (nr->balance == -1)
         {
             left->balance = 0;
@@ -201,7 +201,7 @@ static struct rebalance_result_s _balance_left(
             node->balance = 0;
             nr->balance = 0;
         }
-        return _make_rebalance_result(idx, 0);
+        return _make_rebalance_result(nr_idx, 0);
     }
     else
     {
@@ -233,8 +233,8 @@ static struct rebalance_result_s _balance_right(
     if (right->balance == -1)
     {
         node->right = _rotate_right(buffer_set, node->right, right);
-        idx = _rotate_left(buffer_set, idx, node);
-        struct node_s * nr = _get_node(buffer_set, idx);
+        const uint16_t nr_idx = _rotate_left(buffer_set, idx, node);
+        struct node_s * nr = _get_node(buffer_set, nr_idx);
         if (nr->balance == 1)
         {
             right->balance = 0;
@@ -253,7 +253,7 @@ static struct rebalance_result_s _balance_right(
             node->balance = 0;
             nr->balance = 0;
         }
-        return _make_rebalance_result(idx, 0);
+        return _make_rebalance_result(nr_idx, 0);
     }
     else
     {
@@ -397,7 +397,7 @@ static struct insert_result_s _insert(
             node->left = insert_result.idx;
             if (insert_result.height_changed)
             {
-                const int16_t balance = --node->balance;
+                const int8_t balance = --node->balance;
                 if (balance == 0)
                     return _make_insert_result(idx, 0);
                 else if (balance == -1)
@@ -425,7 +425,7 @@ static struct insert_result_s _insert(
             node->right = insert_result.idx;
             if (insert_result.height_changed)
             {
-                const int16_t balance = ++node->balance;
+                const int8_t balance = ++node->balance;
                 if (balance == 0)
                     return _make_insert_result(idx, 0);
                 else if (balance == 1)
@@ -543,7 +543,7 @@ static struct erase_result_s _erase(
         node->left = erase_result.idx;
         if (erase_result.height_changed)
         {
-            const int16_t balance = ++node->balance;
+            const int8_t balance = ++node->balance;
             if (balance == 0)
                 return _make_erase_result(idx, 1);
             else if (balance == 1)
@@ -568,7 +568,7 @@ static struct erase_result_s _erase(
         node->right = erase_result.idx;
         if (erase_result.height_changed)
         {
-            const int16_t balance = --node->balance;
+            const int8_t balance = --node->balance;
             if (balance == 0)
                 return _make_erase_result(idx, 1);
             else if (balance == -1)
@@ -626,7 +626,7 @@ static struct erase_result_s _erase(
 
             if (erase_result.height_changed)
             {
-                const int16_t balance = --tmp->balance;
+                const int8_t balance = --tmp->balance;
                 if (balance == 0)
                     return _make_erase_result(tmp_idx, 1);
                 else if (balance == -1)
