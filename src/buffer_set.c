@@ -295,7 +295,7 @@ struct insert_result_s
 struct value_node_s
 {
     uint16_t idx;
-    uint16_t new_node;
+    uint16_t inserted;
 };
 
 static struct insert_result_s _make_insert_result(uint16_t idx, uint16_t height_changed)
@@ -353,15 +353,16 @@ static struct insert_result_s _insert(
             if (buffer_set->capacity == MAX_CAPACITY)
             {
                 value_node->idx = NULL_IDX;
-                return _make_insert_result(0, 0);
+                return _make_insert_result(idx, 0);
             }
 
             const uint16_t new_capacity = _calculate_new_capacity(buffer_set->capacity);
+            assert(new_capacity > buffer_set->capacity);
             void * buffer = malloc(new_capacity * buffer_set->node_size);
             if (!buffer)
             {
                 value_node->idx = NULL_IDX;
-                return _make_insert_result(0, 0);
+                return _make_insert_result(idx, 0);
             }
 
             memcpy(buffer, buffer_set->buffer, buffer_set->size * buffer_set->node_size);
@@ -389,8 +390,10 @@ static struct insert_result_s _insert(
         node->right = NULL_IDX;
         node->balance = 0;
 
+        buffer_set->size++;
         value_node->idx = idx;
-        value_node->new_node = 1;
+        value_node->inserted = 1;
+
         return _make_insert_result(idx, 1);
     }
     else
@@ -400,9 +403,6 @@ static struct insert_result_s _insert(
         if (cmp < 0)
         {
             const struct insert_result_s insert_result = _insert(buffer_set, value, node->left, value_node);
-            if (value_node->idx == NULL_IDX)
-                return insert_result;
-
             node = _get_node(buffer_set, idx);
             node->left = insert_result.idx;
             if (insert_result.height_changed)
@@ -428,9 +428,6 @@ static struct insert_result_s _insert(
         else if (cmp > 0)
         {
             const struct insert_result_s insert_result = _insert(buffer_set, value, node->right, value_node);
-            if (value_node->idx == NULL_IDX)
-                return insert_result;
-
             node = _get_node(buffer_set, idx);
             node->right = insert_result.idx;
             if (insert_result.height_changed)
@@ -456,7 +453,7 @@ static struct insert_result_s _insert(
         else
         {
             value_node->idx = idx;
-            value_node->new_node = 0;
+            value_node->inserted = 0;
             return _make_insert_result(idx, 0);
         }
     }
@@ -479,14 +476,7 @@ void * buffer_set_insert(
         return NULL;
 
     buffer_set->root = insert_result.idx;
-
-    if (value_node.new_node)
-    {
-        *inserted = 1;
-        buffer_set->size++;
-    }
-    else
-        *inserted = 0;
+    *inserted = value_node.inserted;
 
     struct node_s * node = _get_node(buffer_set, value_node.idx);
     return _get_node_value(node);
