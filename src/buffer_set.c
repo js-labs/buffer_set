@@ -405,50 +405,42 @@ static struct insert_result_s _insert(
             const struct insert_result_s insert_result = _insert(buffer_set, value, node->left, value_node);
             node = _get_node(buffer_set, idx);
             node->left = insert_result.idx;
+            uint16_t height_changed = 0;
             if (insert_result.height_changed)
             {
                 const int8_t balance = --node->balance;
-                if (balance == 0)
-                    return _make_insert_result(idx, 0);
-                else if (balance == -1)
-                    return _make_insert_result(idx, 1);
-                else
+                if (balance == -1)
+                    height_changed = 1;
+                else if (balance == -2)
                 {
-                    assert(balance == -2);
                     const struct rebalance_result_s rebalance_result = _balance_left(buffer_set, idx, node);
                     idx = rebalance_result.idx;
                     assert(rebalance_result.height_changed == 0);
                     assert(_get_node(buffer_set, idx)->balance == 0);
-                    return _make_insert_result(idx, 0);
                 }
             }
-            else
-                return _make_insert_result(idx, 0);
+            return _make_insert_result(idx, height_changed);
         }
         else if (cmp > 0)
         {
             const struct insert_result_s insert_result = _insert(buffer_set, value, node->right, value_node);
             node = _get_node(buffer_set, idx);
             node->right = insert_result.idx;
+            uint16_t height_changed = 0;
             if (insert_result.height_changed)
             {
                 const int8_t balance = ++node->balance;
-                if (balance == 0)
-                    return _make_insert_result(idx, 0);
-                else if (balance == 1)
-                    return _make_insert_result(idx, 1);
-                else
+                if (balance == 1)
+                    height_changed = 1;
+                else if (balance == 2)
                 {
-                    assert(balance == 2);
                     const struct rebalance_result_s rebalance_result = _balance_right(buffer_set, idx, node);
                     idx = rebalance_result.idx;
                     assert(rebalance_result.height_changed == 0);
                     assert(_get_node(buffer_set, idx)->balance == 0);
-                    return _make_insert_result(idx, 0);
                 }
             }
-            else
-                return _make_insert_result(idx, 0);
+            return _make_insert_result(idx, height_changed);
         }
         else
         {
