@@ -16,6 +16,7 @@
 #include <buffer_set/buffer_set.h>
 #include <sys/time.h>
 #include <stdlib.h>
+#include <search.h>
 
 static int int_cmp(const void * pv1, const void * pv2)
 {
@@ -36,7 +37,7 @@ static unsigned int elapsed_time(struct timeval start, struct timeval end)
 
 #define COUNT (10*1000)
 
-int main(int argc, const char * argv[])
+static unsigned int test_buffer_set()
 {
     buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT, int_cmp);
     if (buffer_set == NULL)
@@ -58,9 +59,34 @@ int main(int argc, const char * argv[])
     struct timeval tv_end;
     gettimeofday(&tv_end, NULL);
 
-    printf("inserted values [0...%u] @ %u usec\n", COUNT-1, elapsed_time(tv_start, tv_end));
-
     buffer_set_destroy(buffer_set);
 
+    return elapsed_time(tv_start, tv_end);
+}
+
+static unsigned int test_stdlib()
+{
+    void * root = NULL;
+
+    struct timeval tv_start;
+    gettimeofday(&tv_start, NULL);
+
+    for (int idx=0; idx<COUNT; idx++)
+    {
+        int inserted;
+        void * ptr = tsearch(&idx, &root, int_cmp);
+        *((int*)ptr) = idx;
+    }
+
+    struct timeval tv_end;
+    gettimeofday(&tv_end, NULL);
+
+    return elapsed_time(tv_start, tv_end);
+}
+
+int main(int argc, const char * argv[])
+{
+    printf("buffer_set: inserted values [0...%u] @ %u usec\n", COUNT-1, test_buffer_set());
+    printf("stdlib: inserted values [0...%u] @ %u usec\n", COUNT-1, test_buffer_set());
     return 0;
 }
