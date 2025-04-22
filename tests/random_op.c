@@ -283,7 +283,7 @@ int random_op()
     if (!ret)
     {
         struct validation_context_s validation_context = { golden_set, history, 0 };
-        buffer_set_for_each(buffer_set, validation_callback, &validation_context);
+        buffer_set_walk(buffer_set, validation_callback, &validation_context);
         ret = validation_context.result;
         if (!ret)
         {

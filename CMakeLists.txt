@@ -20,6 +20,7 @@ if(BUILD_TESTS)
         tests/max_capacity.c
         tests/random_op.c
         tests/reg.c
+        tests/walk.c
     )
 
     add_executable(buffer_set_tests ${TEST_SRCS})

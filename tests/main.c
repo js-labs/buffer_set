@@ -39,6 +39,7 @@ int insert();
 int max_capacity();
 int random_op();
 int reg();
+int walk();
 
 void run_test(int * failed_tests, const char * name, int (*test_func)())
 {
@@ -64,6 +65,7 @@ int main(int argc, const char * argv[])
     RUN_TEST(max_capacity);
     RUN_TEST(random_op);
     //RUN_TEST(reg);
+    RUN_TEST(walk);
 
 #undef RUN_TEST
     if (failed_tests > 0)

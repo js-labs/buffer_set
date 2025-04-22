@@ -665,15 +665,15 @@ const void * buffer_set_erase(
     return _get_node_value(node);
 }
 
-struct for_each_context_s
+struct walk_context_s
 {
     const struct buffer_set_s * buffer_set;
     int (*func)(const void * value, void * arg);
     void * arg;
 };
 
-static int _for_each(
-    const struct for_each_context_s * context,
+static int _walk(
+    const struct walk_context_s * context,
     uint16_t idx
 ) {
     const struct buffer_set_s * buffer_set = context->buffer_set;
@@ -682,26 +682,22 @@ static int _for_each(
 
     if (node->left != NULL_IDX)
     {
-        rc = _for_each(context, node->left);
-        if (rc != 0)
+        rc = _walk(context, node->left);
+        if (rc)
             return rc;
     }
 
     rc = context->func(_get_node_value(node), context->arg);
-    if (rc != 0)
+    if (rc)
         return rc;
 
     if (node->right != NULL_IDX)
-    {
-        rc = _for_each(context, node->right);
-        if (rc != 0)
-            return rc;
-    }
+        rc = _walk(context, node->right);
 
-    return 0;
+    return rc;
 }
 
-int buffer_set_for_each(
+int buffer_set_walk(
     const buffer_set_t * buffer_set,
     int (*func)(const void * value, void * arg),
     void * arg
@@ -710,8 +706,8 @@ int buffer_set_for_each(
     if (root == NULL_IDX)
         return 0;
 
-    const struct for_each_context_s context = { buffer_set, func, arg };
-    return _for_each(&context, root);
+    const struct walk_context_s context = { buffer_set, func, arg };
+    return _walk(&context, root);
 }
 
 struct print_debug_context_s

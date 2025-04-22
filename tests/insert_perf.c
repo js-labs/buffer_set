@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <search.h>
 
-static int int_cmp(const void * pv1, const void * pv2)
+static int buffer_set_cmp(const void * pv1, const void * pv2)
 {
     const int v1 = *((const int*) pv1);
     const int v2 = *((const int*) pv2);
@@ -39,7 +39,7 @@ static unsigned int elapsed_time(struct timeval start, struct timeval end)
 
 static unsigned int test_buffer_set()
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT, int_cmp);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT, buffer_set_cmp);
     if (buffer_set == NULL)
     {
         printf("not enough memory");
@@ -64,6 +64,18 @@ static unsigned int test_buffer_set()
     return elapsed_time(tv_start, tv_end);
 }
 
+static int stdlib_cmp(const void * pv1, const void * pv2)
+{
+    const uintptr_t v1 = (uintptr_t) pv1;
+    const uintptr_t v2 = (uintptr_t) pv2;
+    if (v1 < v2)
+        return -1;
+    else if (v2 < v1)
+        return 1;
+    else
+        return 0;
+}
+
 static unsigned int test_stdlib()
 {
     void * root = NULL;
@@ -71,12 +83,8 @@ static unsigned int test_stdlib()
     struct timeval tv_start;
     gettimeofday(&tv_start, NULL);
 
-    for (int idx=0; idx<COUNT; idx++)
-    {
-        int inserted;
-        void * ptr = tsearch(&idx, &root, int_cmp);
-        *((int*)ptr) = idx;
-    }
+    for (uintptr_t idx=0; idx<COUNT; idx++)
+        tsearch((const void*)idx, &root, stdlib_cmp);
 
     struct timeval tv_end;
     gettimeofday(&tv_end, NULL);
@@ -87,6 +95,6 @@ static unsigned int test_stdlib()
 int main(int argc, const char * argv[])
 {
     printf("buffer_set: inserted values [0...%u] @ %u usec\n", COUNT-1, test_buffer_set());
-    printf("stdlib: inserted values [0...%u] @ %u usec\n", COUNT-1, test_buffer_set());
+    printf("stdlib: inserted values [0...%u] @ %u usec\n", COUNT-1, test_stdlib());
     return 0;
 }
