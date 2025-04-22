@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.0)
 
 project(buffer_set)
 
-option(BUILD_TESTS "Build tests" ON)
+option(BUILD_TESTS "Build tests" OFF)
 
 include_directories(include)
 
