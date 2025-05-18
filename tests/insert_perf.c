@@ -16,6 +16,8 @@
 #include <buffer_set/buffer_set.h>
 #include <stdlib.h>
 
+#define COUNT (10*1000)
+
 #if defined(_WIN32)
 #include <Windows.h>
 
@@ -45,6 +47,8 @@ static int stdlib_cmp(const void* pv1, const void* pv2)
     else
         return 0;
 }
+
+static unsigned int elapsed_time(struct timeval start, struct timeval end);
 
 static unsigned int test_stdlib()
 {
@@ -80,8 +84,6 @@ static unsigned int elapsed_time(struct timeval start, struct timeval end)
 {
     return ((end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec);
 }
-
-#define COUNT (10*1000)
 
 static unsigned int test_buffer_set()
 {
