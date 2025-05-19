@@ -154,7 +154,7 @@ int random_op()
         return -1;
     }
 
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), capacity, int_cmp);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), (uint16_t) capacity, int_cmp);
     int ret = 0;
     int insert_count = 0;
     int erase_count = 0;

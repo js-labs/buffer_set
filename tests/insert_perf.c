@@ -27,8 +27,8 @@ static int gettimeofday(struct timeval * tv, struct timezone * tz)
     GetSystemTimePreciseAsFileTime(&ft);
     ULARGE_INTEGER uli = { .LowPart = ft.dwLowDateTime, .HighPart = ft.dwHighDateTime };
     uli.QuadPart /= 10;
-    tv->tv_usec = (uli.QuadPart % 1000000);
-    tv->tv_sec = (uli.QuadPart / 1000000) - 11644473600L; // adjust 1601 -> 1970
+    tv->tv_usec = (long) (uli.QuadPart % 1000000ULL);
+    tv->tv_sec = (long) ((uli.QuadPart / 1000000ULL) - 11644473600ULL); // adjust 1601 -> 1970
     return 0;
 }
 
