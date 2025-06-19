@@ -47,7 +47,7 @@ struct buffer_set_s
 
 static inline size_t _round(size_t v)
 {
-    const size_t c = (sizeof(long) - 1);
+    const size_t c = (sizeof(void*) - 1);
     v += c;
     return (v - (v & c));
 }

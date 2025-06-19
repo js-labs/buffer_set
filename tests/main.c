@@ -68,6 +68,7 @@ int main(int argc, const char * argv[])
     RUN_TEST(walk);
 
 #undef RUN_TEST
+
     if (failed_tests > 0)
     {
         printf("%d out of %d tests failed\n", failed_tests, tests);
