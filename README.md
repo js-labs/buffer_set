@@ -21,7 +21,7 @@ int int_cmp(const void * pv1, const void * pv2)
         return 0;
 }
 ...
-buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 16/*initial capacity*/, int_cmp);
+buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 16/*initial capacity*/, &int_cmp);
 ```
 Inserting a new element:
 ```C
