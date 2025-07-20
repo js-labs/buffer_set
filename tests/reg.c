@@ -30,7 +30,7 @@ int reg()
     buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 16, int_cmp);
     if (!buffer_set)
     {
-        printf("not enough memory");
+        printf("buffer_set_create() failed");
         return -1;
     }
 
@@ -46,15 +46,15 @@ int reg()
             case operation_type_insert:
                 ptr = buffer_set_insert(buffer_set, &operation->value, &inserted);
                 *((int*)ptr) = operation->value;
-                printf("*** inserted %d\n", operation->value);
+                //printf("*** inserted %d\n", operation->value);
                 break;
             case operation_type_erase:
                 buffer_set_erase(buffer_set, &operation->value);
-                printf("*** erased %d\n", operation->value);
+                //printf("*** erased %d\n", operation->value);
                 break;
         }
-        buffer_set_print_debug(buffer_set, stdout, int_printer);
-        printf("\n");
+        //buffer_set_print_debug(buffer_set, stdout, int_printer);
+        //printf("\n");
     }
 
     buffer_set_destroy(buffer_set);

@@ -52,13 +52,18 @@ static inline size_t _round(size_t v)
     return (v - (v & c));
 }
 
-static inline struct node_s * _get_node(
-    const struct buffer_set_s * buffer_set,
-    uint16_t idx
-) {
+static inline struct node_s * _get_node(const struct buffer_set_s * buffer_set, uint16_t idx)
+{
     char * ptr = (char*) buffer_set->buffer;
     ptr += (buffer_set->node_size * idx);
     return (struct node_s*) ptr;
+}
+
+static inline struct free_node_s * _get_free_node(struct buffer_set_s * buffer_set, uint16_t idx)
+{
+    char * ptr = (char*) buffer_set->buffer;
+    ptr += (buffer_set->node_size * idx);
+    return (struct free_node_s*) ptr;
 }
 
 static inline void * _get_node_value(struct node_s * node)
@@ -88,10 +93,10 @@ static uint16_t _make_free_list(void * buffer, size_t node_size, uint16_t first_
 
 buffer_set_t * buffer_set_create(
     size_t value_size,
-    uint16_t capacity,
+    uint16_t initial_capacity,
     int (*compar)(const void * v1, const void * v2)
 ) {
-    if (capacity > MAX_CAPACITY)
+    if (initial_capacity > MAX_CAPACITY)
         return NULL;
 
     struct buffer_set_s * buffer_set = malloc(sizeof(struct buffer_set_s));
@@ -103,13 +108,13 @@ buffer_set_t * buffer_set_create(
     buffer_set->value_size = value_size;
     buffer_set->node_size = node_size;
     buffer_set->compar = compar;
-    buffer_set->capacity = capacity;
+    buffer_set->capacity = initial_capacity;
     buffer_set->size = 0;
     buffer_set->root = NULL_IDX;
 
-    if (capacity > 0)
+    if (initial_capacity > 0)
     {
-        const size_t buffer_size = (node_size * capacity);
+        const size_t buffer_size = (node_size * initial_capacity);
         void * buffer = malloc(buffer_size);
         if (!buffer)
         {
@@ -117,7 +122,7 @@ buffer_set_t * buffer_set_create(
             return NULL;
         }
         buffer_set->buffer = buffer;
-        buffer_set->free_list = _make_free_list(buffer, node_size, 0, capacity);
+        buffer_set->free_list = _make_free_list(buffer, node_size, 0, initial_capacity);
     }
     else
     {
@@ -317,12 +322,13 @@ static inline uint16_t _round_up_power_of_2(uint16_t value)
 
 static uint16_t _calculate_new_capacity(uint16_t capacity)
 {
+    // The implemented logic doubles the capacity while it less than 1024 elements,
+    // then increase capacity by 1024 each time.
     if (capacity < 16)
         return 16;
 
     if (capacity < 1024)
     {
-        // double the capacity while it is less than 1024
         uint16_t new_capacity = _round_up_power_of_2(capacity);
         if (new_capacity != capacity)
             return new_capacity;
@@ -357,7 +363,7 @@ static struct insert_result_s _insert(
             }
 
             const uint16_t new_capacity = _calculate_new_capacity(buffer_set->capacity);
-            assert(new_capacity > buffer_set->capacity);
+            assert(buffer_set->capacity < new_capacity);
             void * buffer = malloc(new_capacity * buffer_set->node_size);
             if (!buffer)
             {
@@ -480,7 +486,7 @@ uint16_t buffer_set_get_size(buffer_set_t * buffer_set)
 }
 
 void * buffer_set_get(
-    buffer_set_t * buffer_set,
+    const buffer_set_t * buffer_set,
     const void * value
 ) {
     uint16_t idx = buffer_set->root;
@@ -672,8 +678,8 @@ struct walk_context_s
     void * arg;
 };
 
-static int _walk(
-    const struct walk_context_s * context,
+static int _buffer_set_walk(
+    struct walk_context_s * context,
     uint16_t idx
 ) {
     const struct buffer_set_s * buffer_set = context->buffer_set;
@@ -682,7 +688,7 @@ static int _walk(
 
     if (node->left != NULL_IDX)
     {
-        rc = _walk(context, node->left);
+        rc = _buffer_set_walk(context, node->left);
         if (rc)
             return rc;
     }
@@ -692,7 +698,7 @@ static int _walk(
         return rc;
 
     if (node->right != NULL_IDX)
-        rc = _walk(context, node->right);
+        rc = _buffer_set_walk(context, node->right);
 
     return rc;
 }
@@ -706,26 +712,19 @@ int buffer_set_walk(
     if (root == NULL_IDX)
         return 0;
 
-    const struct walk_context_s context = { buffer_set, func, arg };
-    return _walk(&context, root);
+    struct walk_context_s context = { buffer_set, func, arg };
+    return _buffer_set_walk(&context, root);
 }
 
-struct print_debug_context_s
-{
-    const struct buffer_set_s * buffer_set;
-    FILE * file;
-    void (*value_printer)(FILE * file, const void * value);
-};
-
 static void _print_debug(
-    const struct print_debug_context_s * context,
+    const struct buffer_set_s * buffer_set,
+    FILE * file,
+    void (*value_printer)(FILE *, const void *),
     uint16_t idx
 ) {
-    const struct buffer_set_s * buffer_set = context->buffer_set;
-    FILE * file = context->file;
     struct node_s * node = _get_node(buffer_set, idx);
     fprintf(file, "    %hu[", idx);
-    context->value_printer(file, _get_node_value(node));
+    value_printer(file, _get_node_value(node));
 
     fprintf(file, "]: left=");
     if (node->left == NULL_IDX)
@@ -742,10 +741,10 @@ static void _print_debug(
     fprintf(file, " balance=%hd\n", node->balance);
 
     if (node->left != NULL_IDX)
-        _print_debug(context, node->left);
+        _print_debug(buffer_set, file, value_printer, node->left);
 
     if (node->right != NULL_IDX)
-        _print_debug(context, node->right);
+        _print_debug(buffer_set, file, value_printer, node->right);
 }
 
 void buffer_set_print_debug(
@@ -758,10 +757,35 @@ void buffer_set_print_debug(
     if (root != NULL_IDX)
     {
         fprintf(file, "\n");
-        const struct print_debug_context_s context = { buffer_set, file, value_printer };
-        _print_debug(&context, root);
+        _print_debug(buffer_set, file, value_printer, root);
     }
     fprintf(file, "}");
+}
+
+static uint16_t _buffer_set_clear(
+    buffer_set_t * buffer_set,
+    uint16_t free_list,
+    uint16_t idx
+) {
+    struct node_s * node = _get_node(buffer_set, idx);
+    if (node->left != NULL_IDX)
+        free_list = _buffer_set_clear(buffer_set, free_list, node->left);
+    if (node->right != NULL_IDX)
+        free_list = _buffer_set_clear(buffer_set, free_list, node->right);
+    struct free_node_s * free_node = _get_free_node(buffer_set, idx);
+    free_node->next = free_list;
+    return idx;
+}
+
+void buffer_set_clear(buffer_set_t * buffer_set)
+{
+    const uint16_t root = buffer_set->root;
+    if (root != NULL_IDX)
+    {
+        buffer_set->free_list = _buffer_set_clear(buffer_set, buffer_set->free_list, root);
+        buffer_set->root = NULL_IDX;
+        buffer_set->size = 0;
+    }
 }
 
 void buffer_set_destroy(buffer_set_t * buffer_set)

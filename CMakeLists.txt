@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0)
 
 project(buffer_set)
 
-option(BUILD_TESTS "Build tests" OFF)
+option(BUILD_TESTS "Build tests" ON)
 
 include_directories(include)
 
@@ -15,6 +15,7 @@ add_library(buffer_set STATIC ${LIB_SRCS})
 
 if(BUILD_TESTS)
     set(TEST_SRCS
+        tests/clear.c
         tests/insert.c
         tests/main.c
         tests/max_capacity.c
@@ -31,4 +32,3 @@ if(BUILD_TESTS)
     add_dependencies(insert_perf buffer_set)
     target_link_libraries(insert_perf buffer_set)
 endif()
-

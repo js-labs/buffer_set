@@ -25,9 +25,19 @@ extern "C" {
 
 typedef struct buffer_set_s buffer_set_t;
 
+/**
+ * Creates a new buffer set.
+ *
+ * Initializes a buffer set capable of storing values of the specified size,
+ * with an initial capacity and a user-provided comparison function.
+ *
+ * @return
+ * A pointer to the newly created buffer set, or NULL if memory allocation fails
+ * or if the initial capacity is greater than 65,534.
+ */
 buffer_set_t * buffer_set_create(
     size_t value_size,
-    uint16_t capacity,
+    uint16_t initial_capacity,
     int (*compar)(const void * v1, const void * v2)
 );
 
@@ -35,8 +45,8 @@ buffer_set_t * buffer_set_create(
  * Inserts a value into the set.
  *
  * @return
- * A pointer to the value in the set, or NULL if
- * an error occurred (e.g., memory allocation failure).
+ * A pointer to the value in the set, or NULL if an error occurred
+ * (e.g., memory allocation failure or the set has reached its maximum possible size of 65,534 elements).
  *
  * @note
  * The function uses the provided value only for searching within the buffer set. 
@@ -48,7 +58,7 @@ buffer_set_t * buffer_set_create(
  *
  *    int value = 42;
  *    int inserted;
- *    void *ptr = buffer_set_insert(buffer_set, &value, &inserted);
+ *    void * ptr = buffer_set_insert(buffer_set, &value, &inserted);
  *    if (inserted) {
  *        *((int *)ptr) = value;
  *    }
@@ -66,7 +76,7 @@ uint16_t buffer_set_get_size(
 );
 
 void * buffer_set_get(
-    buffer_set_t * buffer_set,
+    const buffer_set_t * buffer_set,
     const void * value
 );
 
@@ -74,8 +84,9 @@ void * buffer_set_get(
  * Erase the value from the set.
  *
  * @return
- * A pointer to the value in the set that was erased, or NULL if the value was not found.
- * The erased value can be accessed until a subsequent insertion operation reuses the node.
+ * A pointer to the value in the set that was erased, or NULL if the value
+ * was not found. The erased value can be accessed until a subsequent insertion
+ * operation reuses the node.
  */
 const void * buffer_set_erase(
     buffer_set_t * buffer_set,
@@ -83,8 +94,9 @@ const void * buffer_set_erase(
 );
 
 /**
- * The buffer_set_walk() function iterates through the set
- * and invokes the action function for each value.
+ * The buffer_set_walk() function iterates through the set in ascending order,
+ * walking the tree from the smallest to the largest value, and invokes the action
+ * function for each value.
  * The action function is called with the value and the arg parameter,
  * which is provided as the third argument to buffer_set_walk().
  * If the action function returns a value other than 0, buffer_set_walk()
@@ -102,6 +114,7 @@ void buffer_set_print_debug(
     void (*value_printer)(FILE * file, const void * value)
 );
 
+void buffer_set_clear(buffer_set_t * buffer_set);
 void buffer_set_destroy(buffer_set_t * buffer_set);
 
 #if defined(__cplusplus)

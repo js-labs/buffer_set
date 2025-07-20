@@ -23,7 +23,7 @@ int max_capacity()
     buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 0, int_cmp);
     if (buffer_set == NULL)
     {
-        printf("not enough memory");
+        printf("buffer_set_create() failed");
         return -1;
     }
 

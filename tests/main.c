@@ -35,6 +35,7 @@ void int_printer(FILE * file, const void * value)
 }
 
 // Tests
+int clear();
 int insert();
 int max_capacity();
 int random_op();
@@ -61,10 +62,11 @@ int main(int argc, const char * argv[])
 
 #define RUN_TEST(name) run_test(&failed_tests, #name, name); tests++
 
+    RUN_TEST(clear);
     RUN_TEST(insert);
     RUN_TEST(max_capacity);
     RUN_TEST(random_op);
-    //RUN_TEST(reg);
+    RUN_TEST(reg);
     RUN_TEST(walk);
 
 #undef RUN_TEST

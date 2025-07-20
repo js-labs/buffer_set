@@ -18,46 +18,32 @@
 #include <string.h>
 #include "test.h"
 
-int insert()
+int clear()
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 0, int_cmp);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 16, int_cmp);
     if (buffer_set == NULL)
     {
         printf("buffer_set_create() failed");
         return -1;
     }
 
-    int value = 42;
-    int inserted = 0;
-    void * ptr1 = buffer_set_insert(buffer_set, &value, &inserted);
-    *((int*)ptr1) = value;
-    int ret = 0;
-
-    if (inserted == 0)
+    for (int idx=5; idx<10; idx++)
     {
-        printf("unexpected 'inserted' result: %d, it should be non-zero", inserted);
-        ret = -1;
+        int inserted = 0;
+        void * ptr = buffer_set_insert(buffer_set, &idx, &inserted);
+        *((int*)ptr) = idx;
     }
-    else
+
+    buffer_set_clear(buffer_set);
+
+    for (int idx=1; idx<16; idx++)
     {
-        inserted = 1;
-        void * ptr2 = buffer_set_insert(buffer_set, &value, &inserted);
-        if (inserted == 0)
-        {
-            if (ptr1 != ptr2)
-            {
-                printf("different value address on update");
-                ret = -1;
-            }
-        }
-        else
-        {
-            printf("unexpected 'inserted' result: %d, it should be zero", inserted);
-            ret = -1;
-        }
+        int inserted = 0;
+        void* ptr = buffer_set_insert(buffer_set, &idx, &inserted);
+        *((int*)ptr) = idx;
     }
 
     buffer_set_destroy(buffer_set);
 
-    return ret;
+    return 0;
 }
