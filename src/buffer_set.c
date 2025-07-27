@@ -324,10 +324,13 @@ static uint16_t _calculate_new_capacity(uint16_t capacity)
 {
     // The implemented logic doubles the capacity while it less than 1024 elements,
     // then increase capacity by 1024 each time.
-    if (capacity < 16)
-        return 16;
+    const uint16_t MIN_CAPACITY = 16;
+    const uint16_t CAPACITY_GROWTH_STEP = 1024;
 
-    if (capacity < 1024)
+    if (capacity < MIN_CAPACITY)
+        return MIN_CAPACITY;
+
+    if (capacity <= (CAPACITY_GROWTH_STEP / 2))
     {
         uint16_t new_capacity = _round_up_power_of_2(capacity);
         if (new_capacity != capacity)
@@ -336,11 +339,11 @@ static uint16_t _calculate_new_capacity(uint16_t capacity)
         return new_capacity;
     }
 
-    const uint16_t remainder = (capacity % 1024);
+    const uint16_t remainder = (capacity % CAPACITY_GROWTH_STEP);
     uint16_t new_capacity = (capacity - remainder);
-    if ((MAX_CAPACITY - new_capacity) < 1024)
+    if ((MAX_CAPACITY - new_capacity) < CAPACITY_GROWTH_STEP)
         return MAX_CAPACITY;
-    new_capacity += 1024;
+    new_capacity += CAPACITY_GROWTH_STEP;
     return new_capacity;
 }
 
@@ -657,8 +660,6 @@ const void * buffer_set_erase(
     if (erased_idx == NULL_IDX)
         return NULL; // not found
 
-    // FIXME: It may be worth reducing the buffer size
-    // if there is a significant amount of free space.
     assert(buffer_set->size > 0);
     buffer_set->size--;
     buffer_set->root = erase_result.idx;

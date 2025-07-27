@@ -31,4 +31,7 @@ if(BUILD_TESTS)
     add_executable(insert_perf tests/insert_perf.c)
     add_dependencies(insert_perf buffer_set)
     target_link_libraries(insert_perf buffer_set)
+
+    include(CTest)
+    add_test(NAME BufferSetTests COMMAND buffer_set_tests)
 endif()
