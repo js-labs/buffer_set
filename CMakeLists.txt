@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.0)
 project(buffer_set)
 
 option(BUILD_TESTS "Build tests" ON)
+option(CODE_COVERAGE "Enable code coverage reporting" OFF)
 
 include_directories(include)
 
@@ -14,6 +15,11 @@ set(LIB_SRCS
 add_library(buffer_set STATIC ${LIB_SRCS})
 
 if(BUILD_TESTS)
+    if(CODE_COVERAGE AND CMAKE_C_COMPILER_ID MATCHES "GNU")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
+    endif()
+
     set(TEST_SRCS
         tests/clear.c
         tests/insert.c
