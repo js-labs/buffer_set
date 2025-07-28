@@ -80,5 +80,5 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        exclude: ${{ steps.strings.outputs.build-output-dir }}/CMakeFiles/insert_perf.dir, ${{ steps.strings.outputs.build-output-dir }}/CMakeFiles/buffer_set_tests.dir
+        gcov_ignore: ${{ steps.strings.outputs.build-output-dir }}/CMakeFiles/insert_perf.dir
         fail_ci_if_error: true
