@@ -80,4 +80,6 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
+        disable_search: true
+        files: ${{ steps.strings.outputs.build-output-dir }}/#home#sergant#buffer_set#src#buffer_set.c.gcov
         fail_ci_if_error: true
