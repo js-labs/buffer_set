@@ -81,5 +81,5 @@ jobs:
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         disable_search: true
-        files: "#home#sergant#buffer_set#src#buffer_set.c.gcov"
+        files: "#home#runner#work#buffer_set#buffer_set#src#buffer_set.c.gcov"
         fail_ci_if_error: true
