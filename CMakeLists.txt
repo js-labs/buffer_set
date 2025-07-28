@@ -16,6 +16,7 @@ add_library(buffer_set STATIC ${LIB_SRCS})
 
 if(BUILD_TESTS)
     if(CODE_COVERAGE AND CMAKE_C_COMPILER_ID MATCHES "GNU")
+        message(NOTICE "** Building with code coverage flags")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage")
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
     endif()
