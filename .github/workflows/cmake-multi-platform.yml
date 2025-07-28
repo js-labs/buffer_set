@@ -80,5 +80,6 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        gcov_ignore: ${{ steps.strings.outputs.build-output-dir }}/CMakeFiles/insert_perf.dir
+        disable_search: true
+        files: "#home#sergant#buffer_set#src#buffer_set.c.gcov"
         fail_ci_if_error: true
