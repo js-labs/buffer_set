@@ -76,6 +76,7 @@ jobs:
       run: ctest --build-config ${{ matrix.build_type }}
 
     - name: Upload coverage reports to Codecov
+      if: matrix.c_compiler == 'gcc'
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
