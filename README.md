@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/github/js-labs/buffer_set/graph/badge.svg?token=FIALQ1ROBK)](https://codecov.io/github/js-labs/buffer_set)
+
 # Buffer set
 
 The library enables storing a set of values in a binary search tree within a contiguous memory buffer. Tree nodes use 16-bit indices instead of pointers to reference other nodes, which reduces the amount of memory required for the tree. As a result, the maximum number of values that can be stored is 65,534. All values are supposed to be of the same size.
