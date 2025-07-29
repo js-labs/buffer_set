@@ -38,6 +38,7 @@ void int_printer(FILE * file, const void * value)
 int clear();
 int insert();
 int max_capacity();
+int print_debug();
 int random_op();
 int reg();
 int walk();
@@ -65,6 +66,7 @@ int main(int argc, const char * argv[])
     RUN_TEST(clear);
     RUN_TEST(insert);
     RUN_TEST(max_capacity);
+    RUN_TEST(print_debug);
     RUN_TEST(random_op);
     RUN_TEST(reg);
     RUN_TEST(walk);
