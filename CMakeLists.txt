@@ -26,6 +26,7 @@ if(BUILD_TESTS)
         tests/insert.c
         tests/main.c
         tests/max_capacity.c
+        tests/print_debug.c
         tests/random_op.c
         tests/reg.c
         tests/walk.c
