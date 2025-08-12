@@ -31,6 +31,9 @@ typedef struct buffer_set_s buffer_set_t;
  * Initializes a buffer set capable of storing values of the specified size,
  * with an initial capacity and a user-provided comparison function.
  *
+ * If the initial capacity is greater than the maximum capacity (65,534),
+ * the function returns NULL and sets errno to EINVAL.
+ *
  * @return
  * A pointer to the newly created buffer set, or NULL if memory allocation fails
  * or if the initial capacity is greater than 65,534.

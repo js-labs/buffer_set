@@ -17,8 +17,15 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
-#define NULL_IDX ((uint16_t)0xFFFF)
+// Small optimization: because the NULL index is defined as 0, buffer element 0
+// is reserved and never used. To simplify access (eliminating the need to subtract 1 from indices),
+// we set a pointer to just before the actual buffer start. This way, buffer[1]
+// maps directly to the first real element (buffer[0]), buffer[2] to the second, etc.,
+// streamlining index calculations.
+
+#define NULL_IDX (0)
 #define MAX_CAPACITY ((uint16_t)0xFFFE)
 
 struct node_s
@@ -97,11 +104,17 @@ buffer_set_t * buffer_set_create(
     int (*compar)(const void * v1, const void * v2)
 ) {
     if (initial_capacity > MAX_CAPACITY)
+    {
+        errno = EINVAL;
         return NULL;
+    }
 
     struct buffer_set_s * buffer_set = malloc(sizeof(struct buffer_set_s));
     if (buffer_set == NULL)
+    {
+        // errno set to ENOMEM by malloc()
         return NULL;
+    }
 
     const size_t node_size = _round(sizeof(struct node_s)) + _round(value_size);
 
@@ -121,8 +134,9 @@ buffer_set_t * buffer_set_create(
             free(buffer_set);
             return NULL;
         }
+        buffer = (((char*)buffer) - node_size);
         buffer_set->buffer = buffer;
-        buffer_set->free_list = _make_free_list(buffer, node_size, 0, initial_capacity);
+        buffer_set->free_list = _make_free_list(buffer, node_size, 1, initial_capacity);
     }
     else
     {
@@ -347,7 +361,7 @@ static uint16_t _calculate_new_capacity(uint16_t capacity)
     return new_capacity;
 }
 
-static struct insert_result_s _insert(
+static struct insert_result_s _buffer_set_insert(
     struct buffer_set_s * buffer_set,
     const void * value,
     uint16_t idx,
@@ -374,16 +388,21 @@ static struct insert_result_s _insert(
                 return _make_insert_result(idx, 0);
             }
 
-            memcpy(buffer, buffer_set->buffer, buffer_set->size * buffer_set->node_size);
-            free(buffer_set->buffer);
+            if (buffer_set->capacity > 0)
+            {
+                void * old_buffer = (((char*)buffer_set->buffer) + buffer_set->node_size);
+                memcpy(buffer, old_buffer, buffer_set->size * buffer_set->node_size);
+                free(old_buffer);
+            }
 
             buffer_set->capacity = new_capacity;
+            buffer = (((char*)buffer) - buffer_set->node_size);
             buffer_set->buffer = buffer;
 
             buffer_set->free_list = _make_free_list(
                 buffer,
                 buffer_set->node_size,
-                buffer_set->size,
+                (buffer_set->size + 1),
                 (new_capacity - buffer_set->size)
             );
 
@@ -411,7 +430,7 @@ static struct insert_result_s _insert(
         int cmp = buffer_set->compar(value, _get_node_value(node));
         if (cmp < 0)
         {
-            const struct insert_result_s insert_result = _insert(buffer_set, value, node->left, value_node);
+            const struct insert_result_s insert_result = _buffer_set_insert(buffer_set, value, node->left, value_node);
             node = _get_node(buffer_set, idx);
             node->left = insert_result.idx;
             uint16_t height_changed = 0;
@@ -432,7 +451,7 @@ static struct insert_result_s _insert(
         }
         else if (cmp > 0)
         {
-            const struct insert_result_s insert_result = _insert(buffer_set, value, node->right, value_node);
+            const struct insert_result_s insert_result = _buffer_set_insert(buffer_set, value, node->right, value_node);
             node = _get_node(buffer_set, idx);
             node->right = insert_result.idx;
             uint16_t height_changed = 0;
@@ -466,7 +485,7 @@ void * buffer_set_insert(
     int * inserted
 ) {
     struct value_node_s value_node;
-    const struct insert_result_s insert_result = _insert(
+    const struct insert_result_s insert_result = _buffer_set_insert(
         buffer_set,
         value,
         buffer_set->root,
@@ -791,6 +810,10 @@ void buffer_set_clear(buffer_set_t * buffer_set)
 
 void buffer_set_destroy(buffer_set_t * buffer_set)
 {
-    free(buffer_set->buffer);
+    if (buffer_set->capacity > 0)
+    {
+        void * buffer = (((char*)buffer_set->buffer) + buffer_set->node_size);
+        free(buffer);
+    }
     free(buffer_set);
 }
