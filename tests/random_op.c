@@ -139,6 +139,7 @@ static void history_append(
         history->next = new_history;
         history = new_history;
         history->next = NULL;
+        history->count = 0;
         *phistory = history;
     }
     const struct operation_s operation = { operation_type, value };
