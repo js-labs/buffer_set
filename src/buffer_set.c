@@ -147,35 +147,41 @@ buffer_set_t * buffer_set_create(
     return buffer_set;
 }
 
-static uint16_t _rotate_right(struct buffer_set_s * buffer_set, uint16_t a_idx, struct node_s * a)
-{
+static uint16_t _rotate_right(
+    struct buffer_set_s * buffer_set,
+    uint16_t a_idx,
+    struct node_s * a_node
+) {
     /*       a             b
      *      / \           / \
      *     b   c?   =>   d?  a
      *    / \               / \
      *   d?  e?            e?  c?
      */
-    assert(_get_node(buffer_set, a_idx) == a);
-    const uint16_t b_idx = a->left;
-    struct node_s * b = _get_node(buffer_set, b_idx);
-    a->left = b->right;
-    b->right = a_idx;
+    assert(_get_node(buffer_set, a_idx) == a_node);
+    const uint16_t b_idx = a_node->left;
+    struct node_s * b_node = _get_node(buffer_set, b_idx);
+    a_node->left = b_node->right;
+    b_node->right = a_idx;
     return b_idx;
 }
 
-static uint16_t _rotate_left(struct buffer_set_s * buffer_set, uint16_t a_idx, struct node_s * a)
-{
+static uint16_t _rotate_left(
+    struct buffer_set_s * buffer_set,
+    uint16_t a_idx,
+    struct node_s * a_node
+) {
     /*    a               b
      *   / \             / \
      *  c?  b     =>    a   d?
      *     / \         / \
      *    e?  d?      c?  e?
      */
-    assert(_get_node(buffer_set, a_idx) == a);
-    const uint16_t b_idx = a->right;
-    struct node_s * b = _get_node(buffer_set, b_idx);
-    a->right = b->left;
-    b->left = a_idx;
+    assert(_get_node(buffer_set, a_idx) == a_node);
+    const uint16_t b_idx = a_node->right;
+    struct node_s * b_node = _get_node(buffer_set, b_idx);
+    a_node->right = b_node->left;
+    b_node->left = a_idx;
     return b_idx;
 }
 
@@ -758,7 +764,7 @@ static void _print_debug(
     else
         fprintf(file, "%hu", node->right);
 
-    fprintf(file, " balance=%hd\n", node->balance);
+    fprintf(file, " balance=%hhd\n", node->balance);
 
     if (node->left != NULL_IDX)
         _print_debug(buffer_set, file, value_printer, node->left);

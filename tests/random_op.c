@@ -20,7 +20,8 @@
 #include <string.h>
 #include "test.h"
 
-#define OPERATIONS 1000
+// 8 levels should be enough
+#define MAX_ELEMENTS 300
 
 struct golden_set_s
 {
@@ -79,99 +80,135 @@ static int golden_set_add(struct golden_set_s * golden_set, int value)
     return 0;
 }
 
+static int golden_set_get(struct golden_set_s * golden_set)
+{
+    size_t idx = rand();
+    idx %= golden_set->size;
+    const int value = golden_set->data[idx];
+    golden_set->size--;
+    const size_t move_size = (golden_set->size - idx) * sizeof(int);
+    if (move_size > 0)
+        memmove(&golden_set->data[idx], &golden_set->data[idx+1], move_size);
+    return value;
+}
+
 static void golden_set_destroy(struct golden_set_s * golden_set)
 {
     free(golden_set->data);
     free(golden_set);
 }
 
-static void print_operations(const struct operation_s * operations, size_t count)
+struct history_s
+{
+    struct history_s * next;
+    size_t count;
+    struct operation_s operations[100];
+};
+
+static struct history_s * history_create()
+{
+    struct history_s * history = malloc(sizeof(struct history_s));
+    if (history)
+    {
+        history->next = NULL;
+        history->count = 0;
+    }
+    return history;
+}
+
+static void history_destroy(struct history_s * history)
+{
+    while (history != NULL)
+    {
+        struct history_s * next = history->next;
+        free(history);
+        history = next;
+    }
+}
+
+static void history_append(
+    struct history_s ** phistory,
+    operation_type_t operation_type,
+    int value
+) {
+    struct history_s * history = *phistory;
+    const size_t max_count = (sizeof(history->operations) / sizeof(history->operations[0]));
+    if (history->count == max_count)
+    {
+        struct history_s * new_history = malloc(sizeof(struct history_s));
+        history->next = new_history;
+        history = new_history;
+        history->next = NULL;
+        *phistory = history;
+    }
+    const struct operation_s operation = { operation_type, value };
+    history->operations[history->count] = operation;
+    history->count++;
+}
+
+static void print_operations(const struct history_s * history)
 {
     printf("\n");
     printf("static const struct operation_s operations[] =\n");
     printf("{\n");
-    for (size_t idx=0; idx<count; idx++)
+    for (; history!=NULL; history = history->next)
     {
-        const struct operation_s * operation = &operations[idx];
-        const char * operation_type;
-        switch (operation->type)
+        for (size_t idx=0; idx<history->count; idx++)
         {
-            case operation_type_insert:
-                operation_type = "operation_type_insert";
-                break;
-            case operation_type_erase:
-                operation_type = "operation_type_erase";
-                break;
+            const struct operation_s * operation = &history->operations[idx];
+            const char * operation_type;
+            switch (operation->type)
+            {
+                case operation_type_insert:
+                    operation_type = "operation_type_insert";
+                    break;
+                case operation_type_erase:
+                    operation_type = "operation_type_erase";
+                    break;
+            }
+            printf("    { %s, %d }\n", operation_type, operation->value);
         }
-        printf("    { %s, %d }\n", operation_type, operation->value);
     }
     printf("}\n");
-}
-
-struct validation_context_s
-{
-    const struct golden_set_s * golden_set;
-    const struct operation_s * history;
-    int result;
-};
-
-static int validation_callback(const void * value, void * arg)
-{
-    struct validation_context_s * validation_context = (struct validation_context_s*) arg;
-    struct golden_set_s * golden_set = (struct golden_set_s*) validation_context->golden_set;
-    const void * ptr = bsearch(value, golden_set->data, golden_set->size, sizeof(int), int_cmp);
-    if (ptr)
-        return 0;
-    else
-    {
-        printf("value %d not found in the golden set", *((const int*)value));
-        print_operations(validation_context->history, OPERATIONS);
-        validation_context->result = -1;
-        return -1;
-    }
 }
 
 int random_op()
 {
     static const char * not_enough_memory = "not enough memory";
 
-    size_t capacity = (OPERATIONS / 2);
-    if (capacity < 16)
-        capacity = 16;
-
-    struct operation_s * history = malloc(sizeof(struct operation_s) * OPERATIONS);
+    struct history_s * history = history_create();
     if (!history)
     {
         printf("%s", not_enough_memory);
         return -1;
     }
 
-    struct golden_set_s * golden_set = golden_set_create(capacity);
+    struct golden_set_s * golden_set = golden_set_create(MAX_ELEMENTS * 3);
     if (!golden_set)
     {
-        free(history);
-        printf("%s", not_enough_memory);
+        history_destroy(history);
+        printf("%s\n", not_enough_memory);
         return -1;
     }
 
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), (uint16_t) capacity, int_cmp);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), (uint16_t) MAX_ELEMENTS/2, int_cmp);
     int ret = 0;
-    int insert_count = 0;
-    int erase_count = 0;
+    int count = 0;
 
+    struct history_s * history_head = history;
     srand((unsigned int) time(NULL));
+    int max_elements_reached = 0;
 
-    for (int idx=0; idx<OPERATIONS; idx++)
+    for (;;)
     {
-        // Distribute insert operations at 75% for growing
         const int rnd = rand();
-        const operation_type_t operation_type = (rnd < (RAND_MAX/ 100 * 75))
-            ? operation_type_insert
-            : operation_type_erase;
+        const operation_type_t operation_type = (rnd < (RAND_MAX / 100 * 70))
+            ? (max_elements_reached ? operation_type_erase : operation_type_insert)
+            : (max_elements_reached ? operation_type_insert : operation_type_erase);
 
         if (operation_type == operation_type_insert)
         {
-            insert_count++;
+            count++;
             int value = rand();
             for (;;)
             {
@@ -188,15 +225,14 @@ int random_op()
                 break;
             }
 
-            const struct operation_s operation = { operation_type_insert, value };
-            history[idx] = operation;
+            history_append(&history, operation_type_insert, value);
 
             int inserted;
             void * ptr = buffer_set_insert(buffer_set, &value, &inserted);
             if (!inserted)
             {
                 printf("unexpected duplicate %d", value);
-                print_operations(history, idx+1);
+                print_operations(history_head);
                 ret = -1;
                 break;
             }
@@ -210,10 +246,13 @@ int random_op()
                     buffer_set_size,
                     golden_set->size
                 );
-                print_operations(history, idx+1);
+                print_operations(history_head);
                 ret = -1;
                 break;
             }
+
+            if (!max_elements_reached)
+                max_elements_reached = (buffer_set_size == MAX_ELEMENTS);
 
             /*
             printf("*** inserted %d\n", value);
@@ -225,27 +264,15 @@ int random_op()
         {
             if (golden_set->size == 0)
                 continue;
-            if (golden_set->size > RAND_MAX)
-                abort(); // FIXME
 
-            erase_count++;
-
-            size_t value_idx = rand();
-            value_idx %= golden_set->size;
-            const int value = golden_set->data[value_idx];
-            golden_set->size--;
-            const size_t move_size = (golden_set->size - value_idx) * sizeof(int);
-            if (move_size > 0)
-                memmove(&golden_set->data[value_idx], &golden_set->data[value_idx+1], move_size);
-
-            const struct operation_s operation = { operation_type_erase, value };
-            history[idx] = operation;
+            const int value = golden_set_get(golden_set);
+            history_append(&history, operation_type_erase, value);
 
             const void * erased_ptr = buffer_set_erase(buffer_set, &value);
             if (!erased_ptr)
             {
                 printf("failed to erase value %d", value);
-                print_operations(history, idx+1);
+                print_operations(history);
                 ret = -1;
                 break;
             }
@@ -254,7 +281,7 @@ int random_op()
             if (erased_value != value)
             {
                 printf("erased value unexpectedly %d instead of %d", erased_value, value);
-                print_operations(history, idx+1);
+                print_operations(history);
                 ret = -1;
                 break;
             }
@@ -267,9 +294,15 @@ int random_op()
                     buffer_set_size,
                     golden_set->size
                 );
-                print_operations(history, idx+1);
+                print_operations(history);
                 ret = -1;
                 break;
+            }
+
+            if (max_elements_reached)
+            {
+                if (buffer_set_size == 0)
+                    break;
             }
 
             /*
@@ -281,33 +314,11 @@ int random_op()
     }
 
     if (!ret)
-    {
-        struct validation_context_s validation_context = { golden_set, history, 0 };
-        buffer_set_walk(buffer_set, validation_callback, &validation_context);
-        ret = validation_context.result;
-        if (!ret)
-        {
-            for (size_t idx=0; idx<golden_set->size; idx++)
-            {
-                const int value = golden_set->data[idx];
-                const void * ptr = buffer_set_get(buffer_set, &value);
-                if (!ptr)
-                {
-                    printf("value %d not found in the buffer set", value);
-                    print_operations(history, OPERATIONS);
-                    ret = -1;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (!ret)
-        printf("%d values inserted, %d erased", insert_count, erase_count);
+        printf("%d values inserted and erased", count);
 
     buffer_set_destroy(buffer_set);
     golden_set_destroy(golden_set);
-    free(history);
+    history_destroy(history_head);
 
     return ret;
 }
