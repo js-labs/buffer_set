@@ -16,7 +16,14 @@
 #include <buffer_set/buffer_set.h>
 #include <stdlib.h>
 
-#define COUNT (10*1000)
+#define COUNT (50*1000)
+
+static unsigned int elapsed_time(
+    const struct timeval * start,
+    const struct timeval * end
+) {
+    return ((end->tv_sec - start->tv_sec) * 1000000 + end->tv_usec - start->tv_usec);
+}
 
 #if defined(_WIN32)
 #include <Windows.h>
@@ -36,7 +43,7 @@ static int gettimeofday(struct timeval * tv, struct timezone * tz)
 #include <sys/time.h>
 #include <search.h>
 
-static int stdlib_cmp(const void* pv1, const void* pv2)
+static int stdlib_cmp(const void * pv1, const void * pv2)
 {
     const uintptr_t v1 = (uintptr_t)pv1;
     const uintptr_t v2 = (uintptr_t)pv2;
@@ -48,11 +55,9 @@ static int stdlib_cmp(const void* pv1, const void* pv2)
         return 0;
 }
 
-static unsigned int elapsed_time(struct timeval start, struct timeval end);
-
 static unsigned int test_stdlib()
 {
-    void* root = NULL;
+    void * root = NULL;
 
     struct timeval tv_start;
     gettimeofday(&tv_start, NULL);
@@ -63,7 +68,7 @@ static unsigned int test_stdlib()
     struct timeval tv_end;
     gettimeofday(&tv_end, NULL);
 
-    return elapsed_time(tv_start, tv_end);
+    return elapsed_time(&tv_start, &tv_end);
 }
 
 #endif
@@ -78,11 +83,6 @@ static int buffer_set_cmp(const void * pv1, const void * pv2)
         return 1;
     else
         return 0;
-}
-
-static unsigned int elapsed_time(struct timeval start, struct timeval end)
-{
-    return ((end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec);
 }
 
 static unsigned int test_buffer_set()
@@ -109,7 +109,7 @@ static unsigned int test_buffer_set()
 
     buffer_set_destroy(buffer_set);
 
-    return elapsed_time(tv_start, tv_end);
+    return elapsed_time(&tv_start, &tv_end);
 }
 
 int main(int argc, const char * argv[])
