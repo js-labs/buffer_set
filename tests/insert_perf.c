@@ -16,6 +16,10 @@
 #include <buffer_set/buffer_set.h>
 #include <stdlib.h>
 
+#if defined(_WIN32)
+#include <Windows.h>
+#endif
+
 #define COUNT (50*1000)
 
 static unsigned int elapsed_time(
@@ -26,7 +30,6 @@ static unsigned int elapsed_time(
 }
 
 #if defined(_WIN32)
-#include <Windows.h>
 
 static int gettimeofday(struct timeval * tv, struct timezone * tz)
 {

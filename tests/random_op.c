@@ -20,8 +20,7 @@
 #include <string.h>
 #include "test.h"
 
-// 8 levels should be enough
-#define MAX_ELEMENTS 300
+#define MAX_ELEMENTS 1000
 
 struct golden_set_s
 {
@@ -240,18 +239,6 @@ int random_op()
             *((int*)ptr) = value;
 
             const uint16_t buffer_set_size = buffer_set_get_size(buffer_set);
-            if (golden_set->size != buffer_set_size)
-            {
-                printf(
-                    "buffer set size %hu not equal to the golden set size %zu",
-                    buffer_set_size,
-                    golden_set->size
-                );
-                print_operations(history_head);
-                ret = -1;
-                break;
-            }
-
             if (!max_elements_reached)
                 max_elements_reached = (buffer_set_size == MAX_ELEMENTS);
 
@@ -288,18 +275,6 @@ int random_op()
             }
 
             const uint16_t buffer_set_size = buffer_set_get_size(buffer_set);
-            if (golden_set->size != buffer_set_size)
-            {
-                printf(
-                    "buffer set size %hu not equal to the golden set size %zu",
-                    buffer_set_size,
-                    golden_set->size
-                );
-                print_operations(history);
-                ret = -1;
-                break;
-            }
-
             if (max_elements_reached)
             {
                 if (buffer_set_size == 0)
@@ -311,6 +286,19 @@ int random_op()
             buffer_set_print_debug(buffer_set, stdout, int_printer);
             printf("\n");
             */
+        }
+
+        const uint16_t buffer_set_size = buffer_set_get_size(buffer_set);
+        if (golden_set->size != buffer_set_size)
+        {
+            printf(
+                "buffer set size %hu not equal to the golden set size %zu",
+                buffer_set_size,
+                golden_set->size
+            );
+            print_operations(history);
+            ret = -1;
+            break;
         }
     }
 
