@@ -288,6 +288,28 @@ int random_op()
             */
         }
 
+        for (size_t idx=0; idx<golden_set->size; idx++)
+        {
+            const void * value = buffer_set_get(buffer_set, &golden_set->data[idx]);
+            if (!value)
+            {
+                printf("value %d not found", golden_set->data[idx]);
+                print_operations(history);
+                ret = -1;
+                break;
+            }
+
+            if (*((const int*)value) != golden_set->data[idx])
+            {
+                printf("got %d instead of %d", *((const int*)value), golden_set->data[idx]);
+                print_operations(history);
+                ret = -1;
+                break;
+            }
+        }
+        if (ret != 0)
+            break;
+
         const uint16_t buffer_set_size = buffer_set_get_size(buffer_set);
         if (golden_set->size != buffer_set_size)
         {
@@ -302,7 +324,7 @@ int random_op()
         }
     }
 
-    if (!ret)
+    if (ret != 0)
         printf("%d values inserted and erased", count);
 
     buffer_set_destroy(buffer_set);
