@@ -240,9 +240,11 @@ int random_op()
             }
             *((int*)ptr) = value;
 
-            const uint16_t buffer_set_size = buffer_set_get_size(buffer_set);
             if (!max_elements_reached)
+            {
+                const uint16_t buffer_set_size = buffer_set_get_size(buffer_set);
                 max_elements_reached = (buffer_set_size == MAX_ELEMENTS);
+            }
 
             /*
             printf("*** inserted %d\n", value);
@@ -276,9 +278,9 @@ int random_op()
                 break;
             }
 
-            const uint16_t buffer_set_size = buffer_set_get_size(buffer_set);
             if (max_elements_reached)
             {
+                const uint16_t buffer_set_size = buffer_set_get_size(buffer_set);
                 if (buffer_set_size == 0)
                     break;
             }
