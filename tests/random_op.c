@@ -20,7 +20,8 @@
 #include <string.h>
 #include "test.h"
 
-#define MAX_ELEMENTS 1000
+// ~11 levels should be enough
+#define MAX_ELEMENTS 2100
 
 struct golden_set_s
 {
@@ -29,21 +30,15 @@ struct golden_set_s
     int * data;
 };
 
-struct golden_set_s * golden_set_create(size_t capacity)
+static int golden_set_init(struct golden_set_s * golden_set, size_t capacity)
 {
-    struct golden_set_s * golden_set = malloc(sizeof(struct golden_set_s));
-    if (!golden_set)
-        return NULL;
     golden_set->capacity = capacity;
     golden_set->size = 0;
     golden_set->data = malloc(sizeof(int*) * capacity);
     if (golden_set->data)
-        return golden_set;
+        return 0;
     else
-    {
-        free(golden_set);
-        return NULL;
-    }
+        return -1;
 }
 
 static int golden_set_add(struct golden_set_s * golden_set, int value)
@@ -91,71 +86,81 @@ static int golden_set_get(struct golden_set_s * golden_set)
     return value;
 }
 
-static void golden_set_destroy(struct golden_set_s * golden_set)
+static void golden_set_deinit(struct golden_set_s * golden_set)
 {
     free(golden_set->data);
-    free(golden_set);
 }
 
-struct history_s
+struct history_block_s
 {
-    struct history_s * next;
-    size_t count;
+    struct history_block_s * next;
     struct operation_s operations[100];
 };
 
-static struct history_s * history_create()
+struct history_s
 {
-    struct history_s * history = malloc(sizeof(struct history_s));
-    if (history)
+    size_t count;
+    struct history_block_s * head;
+    struct history_block_s * tail;
+};
+
+static int history_init(struct history_s * history)
+{
+    history->head = malloc(sizeof(struct history_block_s));
+    if (history->head)
     {
-        history->next = NULL;
         history->count = 0;
+        history->tail = history->head;
+        return 0;
     }
-    return history;
+    return -1;
 }
 
-static void history_destroy(struct history_s * history)
+static void history_deinit(struct history_s * history)
 {
-    while (history != NULL)
+    struct history_block_s * history_block = history->head;
+    while (history_block != NULL)
     {
-        struct history_s * next = history->next;
-        free(history);
-        history = next;
+        struct history_block_s * next = history_block->next;
+        free(history_block);
+        history_block = next;
     }
 }
 
 static void history_append(
-    struct history_s ** phistory,
+    struct history_s * history,
     operation_type_t operation_type,
     int value
 ) {
-    struct history_s * history = *phistory;
-    const size_t max_count = (sizeof(history->operations) / sizeof(history->operations[0]));
+    struct history_block_s * history_block = history->tail;
+    const size_t max_count = (sizeof(history_block->operations) / sizeof(history_block->operations[0]));
     if (history->count == max_count)
     {
-        struct history_s * new_history = malloc(sizeof(struct history_s));
-        history->next = new_history;
-        history = new_history;
-        history->next = NULL;
+        struct history_block_s * new_history_block = malloc(sizeof(struct history_block_s));
+        new_history_block->next = NULL;
+        history->tail = new_history_block;
         history->count = 0;
-        *phistory = history;
     }
     const struct operation_s operation = { operation_type, value };
-    history->operations[history->count] = operation;
+    history->tail->operations[history->count] = operation;
     history->count++;
 }
 
-static void print_operations(const struct history_s * history)
+static void history_print(const struct history_s * history)
 {
     printf("\n");
     printf("static const struct operation_s operations[] =\n");
     printf("{\n");
-    for (; history!=NULL; history = history->next)
+    struct history_block_s * history_block = history->head;
+    for (; history_block!=NULL; history_block = history_block->next)
     {
-        for (size_t idx=0; idx<history->count; idx++)
+        const size_t count = (history_block == history->tail)
+            ? history->count
+            : (sizeof(history_block->operations) / sizeof(history_block->operations[0]));
+
+        for (size_t idx=0; idx<count; idx++)
         {
-            const struct operation_s * operation = &history->operations[idx];
+            const struct operation_s * operation = &history_block->operations[idx];
             const char * operation_type;
             switch (operation->type)
             {
@@ -166,36 +171,34 @@ static void print_operations(const struct history_s * history)
                     operation_type = "operation_type_erase";
                     break;
             }
-            printf("    { %s, %d }\n", operation_type, operation->value);
+            printf("    { %s, %d },\n", operation_type, operation->value);
         }
     }
-    printf("}\n");
+    printf("};\n");
 }
 
 int random_op()
 {
     static const char * not_enough_memory = "not enough memory";
 
-    struct history_s * history = history_create();
-    if (!history)
+    struct history_s history;
+    if (history_init(&history))
     {
         printf("%s", not_enough_memory);
         return -1;
     }
 
-    struct golden_set_s * golden_set = golden_set_create(MAX_ELEMENTS * 3);
-    if (!golden_set)
+    struct golden_set_s golden_set;
+    if (golden_set_init(&golden_set, MAX_ELEMENTS * 3))
     {
-        history_destroy(history);
+        history_deinit(&history);
         printf("%s\n", not_enough_memory);
         return -1;
     }
 
     buffer_set_t * buffer_set = buffer_set_create(sizeof(int), (uint16_t) MAX_ELEMENTS/2, int_cmp);
     int ret = 0;
-    int count = 0;
 
-    struct history_s * history_head = history;
     srand((unsigned int) time(NULL));
     int max_elements_reached = 0;
 
@@ -208,17 +211,16 @@ int random_op()
 
         if (operation_type == operation_type_insert)
         {
-            count++;
             int value = rand();
             for (;;)
             {
-                const void * ptr = bsearch(&value, golden_set->data, golden_set->size, sizeof(int), int_cmp);
+                const void * ptr = bsearch(&value, golden_set.data, golden_set.size, sizeof(int), int_cmp);
                 if (!ptr)
                     break;
                 value = rand();
             }
 
-            if (golden_set_add(golden_set, value) != 0)
+            if (golden_set_add(&golden_set, value) != 0)
             {
                 printf("%s", not_enough_memory);
                 ret = -1;
@@ -232,7 +234,7 @@ int random_op()
             if (!inserted)
             {
                 printf("unexpected duplicate %d", value);
-                print_operations(history_head);
+                history_print(&history);
                 ret = -1;
                 break;
             }
@@ -250,17 +252,17 @@ int random_op()
         }
         else
         {
-            if (golden_set->size == 0)
+            if (golden_set.size == 0)
                 continue;
 
-            const int value = golden_set_get(golden_set);
+            const int value = golden_set_get(&golden_set);
             history_append(&history, operation_type_erase, value);
 
             const void * erased_ptr = buffer_set_erase(buffer_set, &value);
             if (!erased_ptr)
             {
                 printf("failed to erase value %d", value);
-                print_operations(history);
+                history_print(&history);
                 ret = -1;
                 break;
             }
@@ -269,7 +271,7 @@ int random_op()
             if (erased_value != value)
             {
                 printf("erased value unexpectedly %d instead of %d", erased_value, value);
-                print_operations(history);
+                history_print(&history);
                 ret = -1;
                 break;
             }
@@ -288,21 +290,21 @@ int random_op()
             */
         }
 
-        for (size_t idx=0; idx<golden_set->size; idx++)
+        for (size_t idx=0; idx<golden_set.size; idx++)
         {
-            const void * value = buffer_set_get(buffer_set, &golden_set->data[idx]);
+            const void * value = buffer_set_get(buffer_set, &golden_set.data[idx]);
             if (!value)
             {
-                printf("value %d not found", golden_set->data[idx]);
-                print_operations(history);
+                printf("value %d not found", golden_set.data[idx]);
+                history_print(&history);
                 ret = -1;
                 break;
             }
 
-            if (*((const int*)value) != golden_set->data[idx])
+            if (*((const int*)value) != golden_set.data[idx])
             {
-                printf("got %d instead of %d", *((const int*)value), golden_set->data[idx]);
-                print_operations(history);
+                printf("got %d instead of %d", *((const int*)value), golden_set.data[idx]);
+                history_print(&history);
                 ret = -1;
                 break;
             }
@@ -311,25 +313,25 @@ int random_op()
             break;
 
         const uint16_t buffer_set_size = buffer_set_get_size(buffer_set);
-        if (golden_set->size != buffer_set_size)
+        if (golden_set.size != buffer_set_size)
         {
             printf(
                 "buffer set size %hu not equal to the golden set size %zu",
                 buffer_set_size,
-                golden_set->size
+                golden_set.size
             );
-            print_operations(history);
+            history_print(&history);
             ret = -1;
             break;
         }
     }
 
-    if (ret != 0)
-        printf("%d values inserted and erased", count);
+    if (ret == 0)
+        printf("%d values inserted and erased", MAX_ELEMENTS);
 
     buffer_set_destroy(buffer_set);
-    golden_set_destroy(golden_set);
-    history_destroy(history_head);
+    golden_set_deinit(&golden_set);
+    history_deinit(&history);
 
     return ret;
 }
