@@ -109,6 +109,7 @@ static int history_init(struct history_s * history)
     history->head = malloc(sizeof(struct history_block_s));
     if (history->head)
     {
+        history->head->next = NULL;
         history->count = 0;
         history->tail = history->head;
         return 0;
@@ -138,11 +139,13 @@ static void history_append(
     {
         struct history_block_s * new_history_block = malloc(sizeof(struct history_block_s));
         new_history_block->next = NULL;
-        history->tail = new_history_block;
         history->count = 0;
+        history->tail = new_history_block;
+        history_block->next = new_history_block;
+        history_block = new_history_block;
     }
     const struct operation_s operation = { operation_type, value };
-    history->tail->operations[history->count] = operation;
+    history_block->operations[history->count] = operation;
     history->count++;
 }
 
