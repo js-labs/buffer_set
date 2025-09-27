@@ -24,6 +24,7 @@ extern "C" {
 #endif
 
 typedef struct buffer_set_s buffer_set_t;
+typedef struct buffer_set_iterator_s buffer_set_iterator_t;
 
 /**
  * Creates a new buffer set.
@@ -42,6 +43,31 @@ buffer_set_t * buffer_set_create(
     size_t value_size,
     uint16_t initial_capacity,
     int (*compar)(const void * v1, const void * v2)
+);
+
+uint16_t buffer_set_get_size(buffer_set_t * buffer_set);
+
+buffer_set_iterator_t * buffer_set_begin(buffer_set_t * buffer_set);
+buffer_set_iterator_t * buffer_set_end(buffer_set_t * buffer_set);
+
+buffer_set_iterator_t * buffer_set_iterator_next(
+    buffer_set_t * buffer_set,
+    buffer_set_iterator_t * it
+);
+
+void * buffer_set_get(
+    buffer_set_t * buffer_set,
+    const void * value
+);
+
+void * buffer_set_get_at(
+    buffer_set_t * buffer_set,
+    buffer_set_iterator_t * it
+);
+
+buffer_set_iterator_t * buffer_set_find(
+    buffer_set_t * buffer_set,
+    const void * value
 );
 
 /**
@@ -74,50 +100,24 @@ void * buffer_set_insert(
     int * inserted
 );
 
-uint16_t buffer_set_get_size(
-    buffer_set_t * buffer_set
-);
-
-void * buffer_set_get(
-    const buffer_set_t * buffer_set,
-    const void * value
-);
-
-/**
- * Erase the value from the set.
- *
- * @return
- * A pointer to the value in the set that was erased, or NULL if the value
- * was not found. The erased value can be accessed until a subsequent insertion
- * operation reuses the node.
- */
-const void * buffer_set_erase(
+void * buffer_set_erase(
     buffer_set_t * buffer_set,
     const void * value
 );
 
-/**
- * The buffer_set_walk() function iterates through the set in ascending order,
- * walking the tree from the smallest to the largest value, and invokes the action
- * function for each value.
- * The action function is called with the value and the arg parameter,
- * which is provided as the third argument to buffer_set_walk().
- * If the action function returns a value other than 0, buffer_set_walk()
- * stops the traversal and returns the value returned by action.
- */
-int buffer_set_walk(
-    const buffer_set_t * buffer_set,
-    int (*action)(const void * value, void * arg),
-    void * arg
+void * buffer_set_erase_at(
+    buffer_set_t * buffer_set,
+    buffer_set_iterator_t * it
 );
 
 void buffer_set_print_debug(
-    const buffer_set_t * buffer_set,
+    buffer_set_t * buffer_set,
     FILE * file,
     void (*value_printer)(FILE * file, const void * value)
 );
 
 void buffer_set_clear(buffer_set_t * buffer_set);
+int  buffer_set_verify(buffer_set_t * buffer_set);
 void buffer_set_destroy(buffer_set_t * buffer_set);
 
 #if defined(__cplusplus)

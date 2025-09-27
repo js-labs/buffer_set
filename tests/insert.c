@@ -20,41 +20,50 @@
 
 int insert()
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 0, int_cmp);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 1000, int_cmp);
     if (buffer_set == NULL)
     {
         printf("buffer_set_create() failed");
         return -1;
     }
 
-    int value = 42;
-    int inserted = 0;
-    void * ptr1 = buffer_set_insert(buffer_set, &value, &inserted);
-    *((int*)ptr1) = value;
     int ret = 0;
-
-    if (inserted == 0)
+    for (int value=1; value<1000; value++)
     {
-        printf("unexpected 'inserted' result: %d, it should be non-zero", inserted);
-        ret = -1;
-    }
-    else
-    {
-        inserted = 1;
-        void * ptr2 = buffer_set_insert(buffer_set, &value, &inserted);
+        int inserted = 0;
+        void * ptr1 = buffer_set_insert(buffer_set, &value, &inserted);
         if (inserted == 0)
         {
-            if (ptr1 != ptr2)
-            {
-                printf("different value address on update");
-                ret = -1;
-            }
+            printf("unexpected 'inserted' result: %d, it should be non-zero", inserted);
+            ret = -1;
         }
         else
         {
-            printf("unexpected 'inserted' result: %d, it should be zero", inserted);
-            ret = -1;
+            *((int*)ptr1) = value;
+            inserted = 1;
+            void * ptr2 = buffer_set_insert(buffer_set, &value, &inserted);
+            if (inserted == 0)
+            {
+                if (ptr1 != ptr2)
+                {
+                    printf("different value address on update");
+                    ret = -1;
+                }
+            }
+            else
+            {
+                printf("unexpected 'inserted' result: %d, it should be zero", inserted);
+                ret = -1;
+            }
         }
+    }
+
+    buffer_set_iterator_t * it = buffer_set_begin(buffer_set);
+    buffer_set_iterator_t * it_end = buffer_set_end(buffer_set);
+    while (it != it_end)
+    {
+        const int value = *((const int*) buffer_set_get_at(buffer_set, it));
+        it = buffer_set_iterator_next(buffer_set, it);
     }
 
     buffer_set_destroy(buffer_set);

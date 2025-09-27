@@ -20,7 +20,7 @@
 
 typedef enum
 {
-    operation_type_insert,
+    operation_type_insert = 1,
     operation_type_erase
 }
 operation_type_t;

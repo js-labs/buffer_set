@@ -24,12 +24,12 @@ if(BUILD_TESTS)
     set(TEST_SRCS
         tests/clear.c
         tests/insert.c
+        tests/iterator_next.c
         tests/main.c
         tests/max_capacity.c
         tests/print_debug.c
         tests/random_op.c
         tests/reg.c
-        tests/walk.c
     )
 
     add_executable(buffer_set_tests ${TEST_SRCS})

@@ -20,7 +20,7 @@
 #include <string.h>
 #include "test.h"
 
-// ~11 levels should be enough
+// ~11 levels
 #define MAX_ELEMENTS 2100
 
 struct golden_set_s
@@ -196,7 +196,7 @@ int random_op()
         return -1;
     }
 
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), (uint16_t) MAX_ELEMENTS/2, int_cmp);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), (uint16_t) MAX_ELEMENTS/4, int_cmp);
     int ret = 0;
 
     srand((unsigned int) time(NULL));

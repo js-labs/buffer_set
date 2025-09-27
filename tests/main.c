@@ -37,11 +37,11 @@ void int_printer(FILE * file, const void * value)
 // Tests
 int clear();
 int insert();
+int iterator_next();
 int max_capacity();
 int print_debug();
 int random_op();
 int reg();
-int walk();
 
 void run_test(int * failed_tests, const char * name, int (*test_func)())
 {
@@ -65,11 +65,11 @@ int main(int argc, const char * argv[])
 
     RUN_TEST(clear);
     RUN_TEST(insert);
+    RUN_TEST(iterator_next);
     RUN_TEST(max_capacity);
     RUN_TEST(print_debug);
     RUN_TEST(random_op);
     RUN_TEST(reg);
-    RUN_TEST(walk);
 
 #undef RUN_TEST
 

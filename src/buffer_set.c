@@ -15,9 +15,10 @@
 
 #include <buffer_set/buffer_set.h>
 #include <assert.h>
+#include <errno.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 // Small optimization: because the NULL index is defined as 0, buffer element 0
 // is reserved and never used. To simplify access (eliminating the need to subtract 1 from indices),
@@ -26,10 +27,13 @@
 // streamlining index calculations.
 
 #define NULL_IDX (0)
-#define MAX_CAPACITY ((uint16_t)0xFFFE)
+#define MIN_CAPACITY ((uint16_t)0x0010)
+#define MAX_CAPACITY ((uint16_t)0xFFFF)
+#define CAPACITY_GROWTH_STEP ((uint16_t)0x400)
 
 struct node_s
 {
+    uint16_t parent;
     uint16_t left;
     uint16_t right;
     int8_t balance;
@@ -59,27 +63,35 @@ static inline size_t _round(size_t v)
     return (v - (v & c));
 }
 
-static inline struct node_s * _get_node(const struct buffer_set_s * buffer_set, uint16_t idx)
-{
+static inline struct node_s * _get_node(
+    struct buffer_set_s * buffer_set,
+    uint16_t idx
+) {
     char * ptr = (char*) buffer_set->buffer;
     ptr += (buffer_set->node_size * idx);
     return (struct node_s*) ptr;
 }
 
-static inline struct free_node_s * _get_free_node(struct buffer_set_s * buffer_set, uint16_t idx)
-{
+static inline struct free_node_s * _get_free_node(
+    struct buffer_set_s * buffer_set,
+    uint16_t idx
+) {
     char * ptr = (char*) buffer_set->buffer;
     ptr += (buffer_set->node_size * idx);
     return (struct free_node_s*) ptr;
 }
 
-static inline void * _get_node_value(struct node_s * node)
+static inline void * _node_get_value(struct node_s * node)
 {
     return ((char*)node) + _round(sizeof(struct node_s));
 }
 
-static uint16_t _make_free_list(void * buffer, size_t node_size, uint16_t first_idx, uint16_t count)
-{
+static uint16_t _make_free_list(
+    void * buffer,
+    size_t node_size,
+    uint16_t first_idx,
+    uint16_t count
+) {
     struct free_node_s * free_node = (struct free_node_s*) (((char*)buffer) + (node_size * first_idx));
     uint16_t idx = first_idx;
     for (;;)
@@ -103,12 +115,6 @@ buffer_set_t * buffer_set_create(
     uint16_t initial_capacity,
     int (*compar)(const void * v1, const void * v2)
 ) {
-    if (initial_capacity > MAX_CAPACITY)
-    {
-        errno = EINVAL;
-        return NULL;
-    }
-
     struct buffer_set_s * buffer_set = malloc(sizeof(struct buffer_set_s));
     if (buffer_set == NULL)
     {
@@ -134,9 +140,8 @@ buffer_set_t * buffer_set_create(
             free(buffer_set);
             return NULL;
         }
-        buffer = (((char*)buffer) - node_size);
         buffer_set->buffer = buffer;
-        buffer_set->free_list = _make_free_list(buffer, node_size, 1, initial_capacity);
+        buffer_set->free_list = _make_free_list(buffer, node_size, 1, initial_capacity - 1);
     }
     else
     {
@@ -147,186 +152,77 @@ buffer_set_t * buffer_set_create(
     return buffer_set;
 }
 
-static uint16_t _rotate_right(
-    struct buffer_set_s * buffer_set,
-    uint16_t a_idx,
-    struct node_s * a_node
-) {
-    /*       a             b
-     *      / \           / \
-     *     b   c?   =>   d?  a
-     *    / \               / \
-     *   d?  e?            e?  c?
-     */
-    assert(_get_node(buffer_set, a_idx) == a_node);
-    const uint16_t b_idx = a_node->left;
-    struct node_s * b_node = _get_node(buffer_set, b_idx);
-    a_node->left = b_node->right;
-    b_node->right = a_idx;
-    return b_idx;
-}
-
-static uint16_t _rotate_left(
-    struct buffer_set_s * buffer_set,
-    uint16_t a_idx,
-    struct node_s * a_node
-) {
-    /*    a               b
-     *   / \             / \
-     *  c?  b     =>    a   d?
-     *     / \         / \
-     *    e?  d?      c?  e?
-     */
-    assert(_get_node(buffer_set, a_idx) == a_node);
-    const uint16_t b_idx = a_node->right;
-    struct node_s * b_node = _get_node(buffer_set, b_idx);
-    a_node->right = b_node->left;
-    b_node->left = a_idx;
-    return b_idx;
-}
-
-struct rebalance_result_s
+uint16_t buffer_set_get_size(buffer_set_t * buffer_set)
 {
-    uint16_t idx;
-    uint16_t height_changed;
-};
-
-static inline struct rebalance_result_s _make_rebalance_result(uint16_t idx, uint16_t height_changed)
-{
-    struct rebalance_result_s rebalance_result = { idx, height_changed };
-    return rebalance_result;
+    return buffer_set->size;
 }
 
-static struct rebalance_result_s _balance_left(
-    struct buffer_set_s * buffer_set,
-    uint16_t idx,
-    struct node_s * node
-) {
-    struct node_s * left = _get_node(buffer_set, node->left);
-    if (left->balance == 1)
+buffer_set_iterator_t * buffer_set_begin(buffer_set_t * buffer_set)
+{
+    uint16_t idx = buffer_set->root;
+    if (idx == NULL_IDX)
+        return buffer_set->buffer;
+    for (;;)
     {
-        node->left = _rotate_left(buffer_set, node->left, left);
-        const uint16_t nr_idx = _rotate_right(buffer_set, idx, node);
-        struct node_s * nr = _get_node(buffer_set, nr_idx);
-        assert((nr->balance >= -1) && (nr->balance <= 1));
-        /*
-        if (nr->balance == -1)
+        struct node_s * node = _get_node(buffer_set, idx);
+        if (node->left == NULL_IDX)
+            return (buffer_set_iterator_t*) node;
+        idx = node->left;
+    }
+}
+
+buffer_set_iterator_t * buffer_set_end(buffer_set_t * buffer_set)
+{
+    return buffer_set->buffer;
+}
+
+buffer_set_iterator_t * buffer_set_iterator_next(
+    buffer_set_t * buffer_set,
+    buffer_set_iterator_t * it
+) {
+    struct node_s * node = (struct node_s*) it;
+    if (node->right == NULL_IDX)
+    {
+        for (;;)
         {
-            left->balance = 0;
-            node->balance = 1;
-            nr->balance = 0;
+            if (node->parent == NULL_IDX)
+                return buffer_set_end(buffer_set);
+
+            const ptrdiff_t offs = (((char*)node) - ((char*)buffer_set->buffer));
+            assert((offs % buffer_set->node_size) == 0);
+            const uint16_t from_idx = (uint16_t) (offs / buffer_set->node_size);
+            node = _get_node(buffer_set, node->parent);
+            if (node->left == from_idx)
+                return (buffer_set_iterator_t*) node;
+
+            assert(node->right == from_idx);
         }
-        else if (nr->balance == 0)
-        {
-            left->balance = 0;
-            node->balance = 0;
-        }
-        else
-        {
-            left->balance = -1;
-            node->balance = 0;
-            nr->balance = 0;
-        }
-        */
-        left->balance = (nr->balance == 1) ? -1 : 0;
-        node->balance = (nr->balance == -1) ? 1 : 0;
-        nr->balance = 0;
-        return _make_rebalance_result(nr_idx, 0);
     }
     else
     {
-        idx = _rotate_right(buffer_set, idx, node);
-        assert(_get_node(buffer_set, idx) == left);
-        if (left->balance == 0)
-        {
-            // can happen only on erase
-            // height of the subtree does not change
-            left->balance = 1;
-            node->balance = -1;
-            return _make_rebalance_result(idx, 1);
-        }
-        else
-        {
-            left->balance = 0;
-            node->balance = 0;
-            return _make_rebalance_result(idx, 0);
-        }
+        node = _get_node(buffer_set, node->right);
+        while (node->left != NULL_IDX)
+            node = _get_node(buffer_set, node->left);
+        return (buffer_set_iterator_t*) node;
     }
 }
 
-static struct rebalance_result_s _balance_right(
-    struct buffer_set_s * buffer_set,
-    uint16_t idx,
-    struct node_s * node
+void * buffer_set_get(
+    buffer_set_t * buffer_set,
+    const void * value
 ) {
-    struct node_s * right = _get_node(buffer_set, node->right);
-    if (right->balance == -1)
-    {
-        node->right = _rotate_right(buffer_set, node->right, right);
-        const uint16_t nr_idx = _rotate_left(buffer_set, idx, node);
-        struct node_s * nr = _get_node(buffer_set, nr_idx);
-        assert((nr->balance >= -1) && (nr->balance <= 1));
-        /*
-        if (nr->balance == 1)
-        {
-            right->balance = 0;
-            node->balance = -1;
-            nr->balance = 0;
-        }
-        else if (nr->balance == 0)
-        {
-            right->balance = 0;
-            node->balance = 0;
-        }
-        else
-        {
-            right->balance = 1;
-            node->balance = 0;
-            nr->balance = 0;
-        }
-        */
-        right->balance = (nr->balance == -1) ? 1 : 0;
-        node->balance = (nr->balance == 1) ? -1 : 0;
-        nr->balance = 0;
-        return _make_rebalance_result(nr_idx, 0);
-    }
-    else
-    {
-        idx = _rotate_left(buffer_set, idx, node);
-        assert(_get_node(buffer_set, idx) == right);
-        if (right->balance == 0)
-        {
-            // can happen only on erase,
-            // height of the subtree does not change
-            right->balance = -1;
-            node->balance = 1;
-            return _make_rebalance_result(idx, 1);
-        }
-        else
-        {
-            right->balance = 0;
-            node->balance = 0;
-            return _make_rebalance_result(idx, 0);
-        }
-    }
+    buffer_set_iterator_t * it = buffer_set_find(buffer_set, value);
+    if (it == buffer_set_end(buffer_set))
+        return NULL;
+    return buffer_set_get_at(buffer_set, it);
 }
 
-struct insert_result_s
-{
-    uint16_t idx;
-    uint16_t height_changed;
-};
-
-struct value_node_s
-{
-    uint16_t idx;
-    uint16_t inserted;
-};
-
-static struct insert_result_s _make_insert_result(uint16_t idx, uint16_t height_changed)
-{
-    struct insert_result_s insert_result = { idx, height_changed };
-    return insert_result;
+void * buffer_set_get_at(
+    buffer_set_t * buffer_set,
+    buffer_set_iterator_t * it
+) {
+    struct node_s * node = (struct node_s*) it;
+    return _node_get_value(node);
 }
 
 static inline uint16_t _round_up_power_of_2(uint16_t value)
@@ -340,13 +236,30 @@ static inline uint16_t _round_up_power_of_2(uint16_t value)
     return value;
 }
 
+buffer_set_iterator_t * buffer_set_find(
+    buffer_set_t * buffer_set,
+    const void * value
+) {
+    uint16_t idx = buffer_set->root;
+    for (;;)
+    {
+        if (idx == NULL_IDX)
+            return buffer_set_end(buffer_set);
+        struct node_s * node = _get_node(buffer_set, idx);
+        const int cmp = buffer_set->compar(value, _node_get_value(node));
+        if (cmp < 0)
+            idx = node->left;
+        else if (cmp > 0)
+            idx = node->right;
+        else
+            return (buffer_set_iterator_t*) node;
+    }
+}
+
 static uint16_t _calculate_new_capacity(uint16_t capacity)
 {
     // The implemented logic doubles the capacity while it less than 1024 elements,
     // then increase capacity by 1024 each time.
-    const uint16_t MIN_CAPACITY = 16;
-    const uint16_t CAPACITY_GROWTH_STEP = 1024;
-
     if (capacity < MIN_CAPACITY)
         return MIN_CAPACITY;
 
@@ -367,120 +280,209 @@ static uint16_t _calculate_new_capacity(uint16_t capacity)
     return new_capacity;
 }
 
-static struct insert_result_s _buffer_set_insert(
+static inline uint16_t _rotate_right(
     struct buffer_set_s * buffer_set,
-    const void * value,
+    uint16_t a_idx,
+    struct node_s * a_node
+) {
+    /*       a             b
+     *      / \           / \
+     *     b   c?   =>   d?  a
+     *    / \               / \
+     *   d?  e?            e?  c?
+     */
+    assert(_get_node(buffer_set, a_idx) == a_node);
+    const uint16_t parent_idx = a_node->parent;
+    const uint16_t b_idx = a_node->left;
+    struct node_s * b_node = _get_node(buffer_set, b_idx);
+    a_node->parent = b_idx;
+    a_node->left = b_node->right;
+    // a_node->left can be NULL_IDX,
+    // but since we have a special dummy node at offset 0,
+    // we can safely set the parent there instead of branching
+    _get_node(buffer_set, a_node->left)->parent = a_idx;
+    b_node->parent = parent_idx;
+    b_node->right = a_idx;
+    return b_idx;
+}
+
+static inline uint16_t _rotate_left(
+    struct buffer_set_s * buffer_set,
+    uint16_t a_idx,
+    struct node_s * a_node
+) {
+    /*    a               b
+     *   / \             / \
+     *  c?  b     =>    a   d?
+     *     / \         / \
+     *    e?  d?      c?  e?
+     */
+    assert(_get_node(buffer_set, a_idx) == a_node);
+    const uint16_t parent_idx = a_node->parent;
+    const uint16_t b_idx = a_node->right;
+    struct node_s * b_node = _get_node(buffer_set, b_idx);
+    a_node->parent = b_idx;
+    a_node->right = b_node->left;
+    // a_node->right can be NULL_IDX,
+    // but since we have a special dummy node at offset 0,
+    // we can safely set the parent there instead of branching
+    _get_node(buffer_set, a_node->right)->parent = a_idx;
+    b_node->parent = parent_idx;
+    b_node->left = a_idx;
+    return b_idx;
+}
+
+struct balance_result_s
+{
+    uint16_t idx;
+    uint16_t height_changed;
+};
+
+static inline struct balance_result_s _make_balance_result(
     uint16_t idx,
-    struct value_node_s * value_node
+    uint16_t height_changed
+) {
+    struct balance_result_s balance_result = { idx, height_changed };
+    return balance_result;
+}
+
+static struct balance_result_s _balance_right(
+    struct buffer_set_s * buffer_set,
+    uint16_t idx,
+    struct node_s * node
+) {
+    assert(_get_node(buffer_set, idx) == node);
+    assert(node->balance == 2);
+    struct node_s * right_node = _get_node(buffer_set, node->right);
+    if (right_node->balance == -1)
+    {
+        node->right = _rotate_right(buffer_set, node->right, right_node);
+        const uint16_t head_idx = _rotate_left(buffer_set, idx, node);
+        struct node_s * head_node = _get_node(buffer_set, head_idx);
+        assert((head_node->balance >= -1) && (head_node->balance <= 1));
+        /*
+        if (head_node->balance == 1)
+        {
+            right_node->balance = 0;
+            node->balance = -1;
+            head_node->balance = 0;
+        }
+        else if (head_node->balance == 0)
+        {
+            right_node->balance = 0;
+            node->balance = 0;
+        }
+        else
+        {
+            right_node->balance = 1;
+            node->balance = 0;
+            head_node->balance = 0;
+        }
+        */
+        right_node->balance = (head_node->balance == -1) ? 1 : 0;
+        node->balance = (head_node->balance == 1) ? -1 : 0;
+        head_node->balance = 0;
+        return _make_balance_result(head_idx, 0);
+    }
+    else
+    {
+        const uint16_t head_idx = _rotate_left(buffer_set, idx, node);
+        assert(_get_node(buffer_set, head_idx) == right_node);
+        if (right_node->balance == 0)
+        {
+            // can happen only on erase,
+            right_node->balance = -1;
+            node->balance = 1;
+            return _make_balance_result(head_idx, 1);
+        }
+        else
+        {
+            right_node->balance = 0;
+            node->balance = 0;
+            return _make_balance_result(head_idx, 0);
+        }
+    }
+}
+
+static struct balance_result_s _balance_left(
+    struct buffer_set_s * buffer_set,
+    uint16_t idx,
+    struct node_s * node
+) {
+    assert(_get_node(buffer_set, idx) == node);
+    assert(node->balance == -2);
+
+    struct node_s * left_node = _get_node(buffer_set, node->left);
+    if (left_node->balance == 1)
+    {
+        node->left = _rotate_left(buffer_set, node->left, left_node);
+        const uint16_t head_idx = _rotate_right(buffer_set, idx, node);
+        struct node_s * head_node = _get_node(buffer_set, head_idx);
+        assert((head_node->balance >= -1) && (head_node->balance <= 1));
+        /*
+        if (head_node->balance == -1)
+        {
+            left_node->balance = 0;
+            node->balance = 1;
+            head_node->balance = 0;
+        }
+        else if (head_node->balance == 0)
+        {
+            left_node->balance = 0;
+            node->balance = 0;
+        }
+        else
+        {
+            left->balance = -1;
+            node->balance = 0;
+            nr->balance = 0;
+        }
+        */
+        left_node->balance = (head_node->balance == 1) ? -1 : 0;
+        node->balance = (head_node->balance == -1) ? 1 : 0;
+        head_node->balance = 0;
+        return _make_balance_result(head_idx, 0);
+    }
+    else
+    {
+        const uint16_t head_idx = _rotate_right(buffer_set, idx, node);
+        assert(_get_node(buffer_set, head_idx) == left_node);
+        if (left_node->balance == 0)
+        {
+            // can happen only on erase
+            left_node->balance = 1;
+            node->balance = -1;
+            return _make_balance_result(head_idx, 1);
+        }
+        else
+        {
+            left_node->balance = 0;
+            node->balance = 0;
+            return _make_balance_result(head_idx, 0);
+        }
+    }
+}
+
+static inline void _replace_child(
+    struct buffer_set_s * buffer_set,
+    uint16_t idx,
+    uint16_t old_child,
+    uint16_t new_child
 ) {
     if (idx == NULL_IDX)
     {
-        idx = buffer_set->free_list;
-        if (idx == NULL_IDX)
-        {
-            assert(buffer_set->size == buffer_set->capacity);
-            if (buffer_set->capacity == MAX_CAPACITY)
-            {
-                value_node->idx = NULL_IDX;
-                return _make_insert_result(idx, 0);
-            }
-
-            const uint16_t new_capacity = _calculate_new_capacity(buffer_set->capacity);
-            assert(buffer_set->capacity < new_capacity);
-            void * buffer = malloc(new_capacity * buffer_set->node_size);
-            if (!buffer)
-            {
-                value_node->idx = NULL_IDX;
-                return _make_insert_result(idx, 0);
-            }
-
-            if (buffer_set->capacity > 0)
-            {
-                void * old_buffer = (((char*)buffer_set->buffer) + buffer_set->node_size);
-                memcpy(buffer, old_buffer, buffer_set->size * buffer_set->node_size);
-                free(old_buffer);
-            }
-
-            buffer_set->capacity = new_capacity;
-            buffer = (((char*)buffer) - buffer_set->node_size);
-            buffer_set->buffer = buffer;
-
-            buffer_set->free_list = _make_free_list(
-                buffer,
-                buffer_set->node_size,
-                (buffer_set->size + 1),
-                (new_capacity - buffer_set->size)
-            );
-
-            idx = buffer_set->free_list;
-        }
-
-        const size_t offs = (buffer_set->node_size * idx);
-        struct free_node_s * free_node = (struct free_node_s*) (((char*)buffer_set->buffer) + offs);
-        buffer_set->free_list = free_node->next;
-
-        struct node_s * node = (struct node_s*) (((char*)buffer_set->buffer) + offs);
-        node->left = NULL_IDX;
-        node->right = NULL_IDX;
-        node->balance = 0;
-
-        buffer_set->size++;
-        value_node->idx = idx;
-        value_node->inserted = 1;
-
-        return _make_insert_result(idx, 1);
+        assert(buffer_set->root == old_child);
+        buffer_set->root = new_child;
     }
     else
     {
         struct node_s * node = _get_node(buffer_set, idx);
-        int cmp = buffer_set->compar(value, _get_node_value(node));
-        if (cmp < 0)
-        {
-            const struct insert_result_s insert_result = _buffer_set_insert(buffer_set, value, node->left, value_node);
-            node = _get_node(buffer_set, idx);
-            node->left = insert_result.idx;
-            uint16_t height_changed = 0;
-            if (insert_result.height_changed)
-            {
-                const int8_t balance = --node->balance;
-                if (balance == -1)
-                    height_changed = 1;
-                else if (balance == -2)
-                {
-                    const struct rebalance_result_s rebalance_result = _balance_left(buffer_set, idx, node);
-                    idx = rebalance_result.idx;
-                    assert(rebalance_result.height_changed == 0);
-                    assert(_get_node(buffer_set, idx)->balance == 0);
-                }
-            }
-            return _make_insert_result(idx, height_changed);
-        }
-        else if (cmp > 0)
-        {
-            const struct insert_result_s insert_result = _buffer_set_insert(buffer_set, value, node->right, value_node);
-            node = _get_node(buffer_set, idx);
-            node->right = insert_result.idx;
-            uint16_t height_changed = 0;
-            if (insert_result.height_changed)
-            {
-                const int8_t balance = ++node->balance;
-                if (balance == 1)
-                    height_changed = 1;
-                else if (balance == 2)
-                {
-                    const struct rebalance_result_s rebalance_result = _balance_right(buffer_set, idx, node);
-                    idx = rebalance_result.idx;
-                    assert(rebalance_result.height_changed == 0);
-                    assert(_get_node(buffer_set, idx)->balance == 0);
-                }
-            }
-            return _make_insert_result(idx, height_changed);
-        }
+        if (node->left == old_child)
+            node->left = new_child;
         else
         {
-            value_node->idx = idx;
-            value_node->inserted = 0;
-            return _make_insert_result(idx, 0);
+            assert(node->right == old_child);
+            node->right = new_child;
         }
     }
 }
@@ -490,291 +492,413 @@ void * buffer_set_insert(
     const void * value,
     int * inserted
 ) {
-    struct value_node_s value_node;
-    const struct insert_result_s insert_result = _buffer_set_insert(
-        buffer_set,
-        value,
-        buffer_set->root,
-        &value_node
-    );
-
-    if (value_node.idx == NULL_IDX)
-        return NULL;
-
-    buffer_set->root = insert_result.idx;
-    *inserted = value_node.inserted;
-
-    struct node_s * node = _get_node(buffer_set, value_node.idx);
-    return _get_node_value(node);
-}
-
-uint16_t buffer_set_get_size(buffer_set_t * buffer_set)
-{
-    return buffer_set->size;
-}
-
-void * buffer_set_get(
-    const buffer_set_t * buffer_set,
-    const void * value
-) {
+    uint16_t parent_idx = NULL_IDX;
     uint16_t idx = buffer_set->root;
+    int cmp;
+
     for (;;)
     {
         if (idx == NULL_IDX)
-            return NULL;
+            break;
+
         struct node_s * node = _get_node(buffer_set, idx);
-        const int cmp = buffer_set->compar(value, _get_node_value(node));
+        void * node_value = _node_get_value(node);
+        cmp = buffer_set->compar(value, node_value);
+        if (cmp == 0)
+        {
+            *inserted = 0;
+            return node_value;
+        }
+
+        parent_idx = idx;
         if (cmp < 0)
             idx = node->left;
-        else if (cmp > 0)
+        else // (cmp > 0)
             idx = node->right;
-        else
-            return _get_node_value(node);
     }
-}
 
-struct erase_result_s
-{
-    uint16_t idx;
-    uint16_t height_changed;
-};
-
-static inline struct erase_result_s _make_erase_result(uint16_t idx, uint16_t height_changed)
-{
-    struct erase_result_s erase_result = { idx, height_changed };
-    return erase_result;
-}
-
-static struct erase_result_s _erase(
-    struct buffer_set_s * buffer_set,
-    const void * value,
-    uint16_t idx,
-    uint16_t * erased_idx
-) {
+    idx = buffer_set->free_list;
     if (idx == NULL_IDX)
     {
-        *erased_idx = NULL_IDX;
-        return _make_erase_result(NULL_IDX, 0);
+        assert((buffer_set->size == 0) || ((buffer_set->size + 1) == buffer_set->capacity));
+        if (buffer_set->capacity == MAX_CAPACITY)
+            return NULL;
+
+        const uint16_t new_capacity = _calculate_new_capacity(buffer_set->capacity);
+        assert(buffer_set->capacity < new_capacity);
+        void * buffer = malloc(new_capacity * buffer_set->node_size);
+        if (!buffer)
+            return NULL;
+
+        buffer_set->capacity = new_capacity;
+
+        if (buffer_set->size > 0)
+        {
+            memcpy(
+                ((char*)buffer) + buffer_set->node_size,
+                ((const char*)buffer_set->buffer) + buffer_set->node_size,
+                buffer_set->size * buffer_set->node_size
+            );
+        }
+        free(buffer_set->buffer);
+        buffer_set->buffer = buffer;
+
+        buffer_set->free_list = _make_free_list(
+            buffer,
+            buffer_set->node_size,
+            (buffer_set->size + 1),
+            (new_capacity - buffer_set->size - 1)
+        );
+
+        idx = buffer_set->free_list;
     }
 
-    struct node_s * node = _get_node(buffer_set, idx);
-    const int cmp = buffer_set->compar(value, _get_node_value(node));
+    const size_t offs = (buffer_set->node_size * idx);
+    struct free_node_s * free_node = (struct free_node_s*) (((char*)buffer_set->buffer) + offs);
+    buffer_set->free_list = free_node->next;
+
+    struct node_s * node = (struct node_s*) free_node;
+    node->parent = parent_idx;
+    node->left = NULL_IDX;
+    node->right = NULL_IDX;
+    node->balance = 0;
+    void * ret = _node_get_value(node);
+
+    buffer_set->size++;
+    *inserted = 1;
+
+    if (parent_idx == NULL_IDX)
+    {
+        buffer_set->root = idx;
+        return ret;
+    }
+
+    struct node_s * parent_node = _get_node(buffer_set, parent_idx);
     if (cmp < 0)
     {
-        const struct erase_result_s erase_result = _erase(buffer_set, value, node->left, erased_idx);
-        if (*erased_idx == NULL_IDX)
-            return erase_result;
-
-        node = _get_node(buffer_set, idx);
-        node->left = erase_result.idx;
-        if (erase_result.height_changed)
-        {
-            const int8_t balance = ++node->balance;
-            if (balance == 0)
-                return _make_erase_result(idx, 1);
-            else if (balance == 1)
-                return _make_erase_result(idx, 0);
-            else
-            {
-                assert(balance == 2);
-                const struct rebalance_result_s rebalance_result = _balance_right(buffer_set, idx, node);
-                return _make_erase_result(rebalance_result.idx, !rebalance_result.height_changed);
-            }
-        }
-        else
-            return _make_erase_result(idx, 0);
-    }
-    else if (cmp > 0)
-    {
-        const struct erase_result_s erase_result = _erase(buffer_set, value, node->right, erased_idx);
-        if (*erased_idx == NULL_IDX)
-            return erase_result;
-
-        node = _get_node(buffer_set, idx);
-        node->right = erase_result.idx;
-        if (erase_result.height_changed)
-        {
-            const int8_t balance = --node->balance;
-            if (balance == 0)
-                return _make_erase_result(idx, 1);
-            else if (balance == -1)
-                return _make_erase_result(idx, 0);
-            else
-            {
-                assert(balance == -2);
-                const struct rebalance_result_s rebalance_result = _balance_left(buffer_set, idx, node);
-                return _make_erase_result(rebalance_result.idx, !rebalance_result.height_changed);
-            }
-        }
-        else
-            return _make_erase_result(idx, 0);
+        parent_node->left = idx;
+        const int8_t balance = --parent_node->balance;
+        // parent of the newly inserted node can have only balance -1 or 0 here
+        if (balance == 0)
+            return ret;
+        assert(balance == -1);
     }
     else
     {
-        if ((node->left == NULL_IDX) && (node->right == NULL_IDX))
+        assert(cmp > 0);
+        parent_node->right = idx;
+        const int8_t balance = ++parent_node->balance;
+        // parent of the newly inserted node can have only balance 0 or 1 here
+        if (balance == 0)
+            return ret;
+        assert(balance == 1);
+    }
+
+    uint16_t child_idx = parent_idx;
+    idx = parent_node->parent;
+    while (idx != NULL_IDX)
+    {
+        node = _get_node(buffer_set, idx);
+        if (node->left == child_idx)
         {
-            *erased_idx = idx;
-            return _make_erase_result(NULL_IDX, 1);
-        }
-        else if (node->left == NULL_IDX)
-        {
-            assert(_get_node(buffer_set, node->right)->left == NULL_IDX);
-            assert(_get_node(buffer_set, node->right)->right == NULL_IDX);
-            *erased_idx = idx;
-            return _make_erase_result(node->right, 1);
-        }
-        else if (node->right == NULL_IDX)
-        {
-            assert(_get_node(buffer_set, node->left)->left == NULL_IDX);
-            assert(_get_node(buffer_set, node->left)->right == NULL_IDX);
-            *erased_idx = idx;
-            return _make_erase_result(node->left, 1);
+            const int8_t balance = --node->balance;
+            if (balance == 0)
+                break;
+            else if (balance == -2)
+            {
+                const uint16_t parent_idx = node->parent;
+                const struct balance_result_s balance_result = _balance_left(buffer_set, idx, node);
+                assert(balance_result.height_changed == 0);
+                _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+                break;
+            }
+            assert(balance == -1);
         }
         else
         {
-            uint16_t tmp_idx = node->right;
-            struct node_s * tmp = _get_node(buffer_set, tmp_idx);
-            for (;;)
+            assert(node->right == child_idx);
+            const int8_t balance = ++node->balance;
+            if (balance == 0)
+                break;
+            else if (balance == 2)
             {
-                if (tmp->left == NULL_IDX)
-                    break;
-                tmp_idx = tmp->left;
-                tmp = _get_node(buffer_set, tmp_idx);
+                const uint16_t parent_idx = node->parent;
+                const struct balance_result_s balance_result = _balance_right(buffer_set, idx, node);
+                assert(balance_result.height_changed == 0);
+                _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+                break;
             }
-
-            const struct erase_result_s erase_result = _erase(buffer_set, _get_node_value(tmp), node->right, erased_idx);
-            assert(*erased_idx == tmp_idx);
-            *erased_idx = idx;
-
-            tmp->left = node->left;
-            tmp->right = erase_result.idx;
-            tmp->balance = node->balance;
-
-            if (erase_result.height_changed)
-            {
-                const int8_t balance = --tmp->balance;
-                if (balance == 0)
-                    return _make_erase_result(tmp_idx, 1);
-                else if (balance == -1)
-                    return _make_erase_result(tmp_idx, 0);
-                else
-                {
-                    assert(balance == -2);
-                    const struct rebalance_result_s rebalance_result = _balance_left(buffer_set, tmp_idx, tmp);
-                    return _make_erase_result(rebalance_result.idx, !rebalance_result.height_changed);
-                }
-            }
-            else
-                return _make_erase_result(tmp_idx, 0);
+            assert(balance == 1);
         }
+        child_idx = idx;
+        idx = node->parent;
     }
+
+    return ret;
 }
 
-const void * buffer_set_erase(
+void * buffer_set_erase(
     buffer_set_t * buffer_set,
     const void * value
 ) {
-    uint16_t erased_idx;
-    const struct erase_result_s erase_result = _erase(
-        buffer_set,
-        value,
-        buffer_set->root,
-        &erased_idx
-    );
-
-    if (erased_idx == NULL_IDX)
-        return NULL; // not found
-
-    assert(buffer_set->size > 0);
-    buffer_set->size--;
-    buffer_set->root = erase_result.idx;
-
-    struct node_s * node = _get_node(buffer_set, erased_idx);
-    struct free_node_s * free_node = (struct free_node_s*) node;
-    free_node->next = buffer_set->free_list;
-    buffer_set->free_list = erased_idx;
-
-    return _get_node_value(node);
+    buffer_set_iterator_t * it = buffer_set_find(buffer_set, value);
+    if (it == buffer_set_end(buffer_set))
+        return NULL;
+    else
+        return buffer_set_erase_at(buffer_set, it);
 }
 
-struct walk_context_s
-{
-    const struct buffer_set_s * buffer_set;
-    int (*func)(const void * value, void * arg);
-    void * arg;
-};
+static void _replace_child_and_rebalance(
+    struct buffer_set_s * buffer_set,
+    uint16_t idx,
+    uint16_t old_child,
+    uint16_t new_child
+);
 
-static int _buffer_set_walk(
-    struct walk_context_s * context,
-    uint16_t idx
+static void _rebalance(
+    struct buffer_set_s * buffer_set,
+    uint16_t idx,
+    uint16_t from_child
 ) {
-    const struct buffer_set_s * buffer_set = context->buffer_set;
-    struct node_s * node = _get_node(buffer_set, idx);
-    int rc;
-
-    if (node->left != NULL_IDX)
+    while (idx != NULL_IDX)
     {
-        rc = _buffer_set_walk(context, node->left);
-        if (rc)
-            return rc;
+        struct node_s * node = _get_node(buffer_set, idx);
+        if (node->left == from_child)
+        {
+            const int8_t balance = ++node->balance;
+            if (balance == 2)
+            {
+                const uint16_t parent_idx = node->parent;
+                const struct balance_result_s balance_result = _balance_right(buffer_set, idx, node);
+                const uint16_t height_changed = !balance_result.height_changed;
+                if (height_changed)
+                    _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
+                else
+                    _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+                break;
+            }
+            else if (balance == 1)
+            {
+                // stop balancing
+                break;
+            }
+        }
+        else
+        {
+            assert(node->right == from_child);
+            const int8_t balance = --node->balance;
+            if (balance == -2)
+            {
+                const uint16_t parent_idx = node->parent;
+                const struct balance_result_s balance_result = _balance_left(buffer_set, idx, node);
+                const uint16_t height_changed = !balance_result.height_changed;
+                if (height_changed)
+                    _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
+                else
+                    _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+                break;
+            }
+            else if (balance == -1)
+            {
+                // stop balancing
+                break;
+            }
+        }
+        assert(node->balance == 0);
+        from_child = idx;
+        idx = node->parent;
+    }
+}
+
+static void _replace_child_and_rebalance(
+    struct buffer_set_s * buffer_set,
+    uint16_t idx,
+    uint16_t old_child,
+    uint16_t new_child
+) {
+    if (idx == NULL_IDX)
+    {
+        assert(buffer_set->root == old_child);
+        buffer_set->root = new_child;
+    }
+    else
+    {
+        struct node_s * node = _get_node(buffer_set, idx);
+        if (node->left == old_child)
+        {
+            node->left = new_child;
+            const int8_t balance = ++node->balance;
+            if (balance == 2)
+            {
+                const uint16_t parent_idx = node->parent;
+                const struct balance_result_s balance_result = _balance_right(buffer_set, idx, node);
+                const uint16_t height_changed = !balance_result.height_changed;
+                if (height_changed)
+                    _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
+                else
+                    _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+                return;
+            }
+            else if (balance == 1)
+            {
+                // stop balancing
+                return;
+            }
+        }
+        else
+        {
+            assert(node->right == old_child);
+            node->right = new_child;
+            const int8_t balance = --node->balance;
+            if (balance == -2)
+            {
+                const uint16_t parent_idx = node->parent;
+                const struct balance_result_s balance_result = _balance_left(buffer_set, idx, node);
+                const uint16_t height_changed = !balance_result.height_changed;
+                if (height_changed)
+                    _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
+                else
+                    _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+                return;
+            }
+            else if (balance == -1)
+            {
+                // stop balancing
+                return;
+            }
+        }
+        assert(node->balance == 0);
+        const uint16_t parent = node->parent;
+        if (parent != NULL_IDX)
+            _rebalance(buffer_set, parent, idx);
+    }
+}
+
+void * buffer_set_erase_at(
+    buffer_set_t * buffer_set,
+    buffer_set_iterator_t * it
+) {
+    struct node_s * node = (struct node_s*) it;
+    const ptrdiff_t offs = (((const char*)node) - ((const char*)buffer_set->buffer));
+    assert((offs % buffer_set->node_size) == 0);
+    const uint16_t idx = (uint16_t) (offs / buffer_set->node_size);
+    if ((node->left != NULL_IDX) && (node->right != NULL_IDX))
+    {
+        uint16_t tmp_idx = node->right;
+        struct node_s * tmp_node = _get_node(buffer_set, tmp_idx);
+        for (;;)
+        {
+            if (tmp_node->left == NULL_IDX)
+                break;
+            tmp_idx = tmp_node->left;
+            tmp_node = _get_node(buffer_set, tmp_idx);
+        }
+
+        const uint16_t tmp_parent_idx = tmp_node->parent;
+        tmp_node->left = node->left;
+        _get_node(buffer_set, node->left)->parent = tmp_idx;
+        _get_node(buffer_set, node->right)->parent = tmp_idx;
+        tmp_node->parent = node->parent;
+        tmp_node->balance = node->balance;
+
+        if (tmp_idx == node->right)
+        {
+            const int8_t balance = --tmp_node->balance;
+            if (balance == -2)
+            {
+                const struct balance_result_s balance_result = _balance_left(buffer_set, tmp_idx, tmp_node);
+                const uint16_t height_changed = !balance_result.height_changed;
+                if (height_changed)
+                    _replace_child_and_rebalance(buffer_set, node->parent, idx, balance_result.idx);
+                else
+                    _replace_child(buffer_set, node->parent, idx, balance_result.idx);
+            }
+            else if (balance == -1)
+            {
+                // rebalancing is not required
+                _replace_child(buffer_set, node->parent, idx, tmp_idx);
+            }
+            else
+            {
+                assert(balance == 0);
+                _replace_child_and_rebalance(buffer_set, node->parent, idx, tmp_idx);
+            }
+        }
+        else
+        {
+            const uint16_t tmp_right_idx = tmp_node->right;
+            tmp_node->right = node->right;
+            _replace_child(buffer_set, tmp_node->parent, idx, tmp_idx);
+            _get_node(buffer_set, tmp_right_idx)->parent = tmp_parent_idx;
+            _replace_child_and_rebalance(buffer_set, tmp_parent_idx, tmp_idx, tmp_right_idx);
+        }
+    }
+    else if (node->left != NULL_IDX)
+    {
+        // node->right == NULL_IDX
+        const uint16_t parent = node->parent;
+        _get_node(buffer_set, node->left)->parent = parent;
+        _replace_child_and_rebalance(buffer_set, parent, idx, node->left);
+    }
+    else
+    {
+        // node->left == NULL_IDX,
+        // node->right can be either NULL_IDX or not
+        // since we have a special dummy node at offset 0,
+        // we can safely set the parent there instead of branching
+        const uint16_t parent = node->parent;
+        _get_node(buffer_set, node->right)->parent = parent;
+        _replace_child_and_rebalance(buffer_set, parent, idx, node->right);
     }
 
-    rc = context->func(_get_node_value(node), context->arg);
-    if (rc)
-        return rc;
+    buffer_set->size--;
+    struct free_node_s * free_node = (struct free_node_s*) node;
+    free_node->next = buffer_set->free_list;
+    buffer_set->free_list = idx;
 
-    if (node->right != NULL_IDX)
-        rc = _buffer_set_walk(context, node->right);
-
-    return rc;
+    return _node_get_value(node);
 }
 
-int buffer_set_walk(
-    const buffer_set_t * buffer_set,
-    int (*func)(const void * value, void * arg),
-    void * arg
-) {
-    const uint16_t root = buffer_set->root;
-    if (root == NULL_IDX)
-        return 0;
-
-    struct walk_context_s context = { buffer_set, func, arg };
-    return _buffer_set_walk(&context, root);
-}
-
-static void _print_debug(
-    const struct buffer_set_s * buffer_set,
+static void _buffer_set_print_debug(
+    struct buffer_set_s * buffer_set,
     FILE * file,
     void (*value_printer)(FILE *, const void *),
     uint16_t idx
 ) {
     struct node_s * node = _get_node(buffer_set, idx);
-    fprintf(file, "    %hu[", idx);
-    value_printer(file, _get_node_value(node));
+    fprintf(file, "    ");
+    value_printer(file, _node_get_value(node));
+    fprintf(file, "/%hu", idx);
 
-    fprintf(file, "]: left=");
+    fprintf(file, ": parent=");
+    if (node->parent == NULL_IDX)
+        fprintf(file, "NIL");
+    else
+        fprintf(file, "%hu", node->parent);
+
+    fprintf(file, " left=");
     if (node->left == NULL_IDX)
-        fprintf(file, "null");
+        fprintf(file, "NIL");
     else
         fprintf(file, "%hu", node->left);
 
     fprintf(file, " right=");
     if (node->right == NULL_IDX)
-        fprintf(file, "null");
+        fprintf(file, "NIL");
     else
         fprintf(file, "%hu", node->right);
 
     fprintf(file, " balance=%hhd\n", node->balance);
 
     if (node->left != NULL_IDX)
-        _print_debug(buffer_set, file, value_printer, node->left);
+        _buffer_set_print_debug(buffer_set, file, value_printer, node->left);
 
     if (node->right != NULL_IDX)
-        _print_debug(buffer_set, file, value_printer, node->right);
+        _buffer_set_print_debug(buffer_set, file, value_printer, node->right);
 }
 
 void buffer_set_print_debug(
-    const buffer_set_t * buffer_set,
+    buffer_set_t * buffer_set,
     FILE * file,
     void (*value_printer)(FILE * file, const void * value)
 ) {
@@ -783,13 +907,13 @@ void buffer_set_print_debug(
     if (root != NULL_IDX)
     {
         fprintf(file, "\n");
-        _print_debug(buffer_set, file, value_printer, root);
+        _buffer_set_print_debug(buffer_set, file, value_printer, root);
     }
     fprintf(file, "}");
 }
 
 static uint16_t _buffer_set_clear(
-    buffer_set_t * buffer_set,
+    struct buffer_set_s * buffer_set,
     uint16_t free_list,
     uint16_t idx
 ) {
@@ -816,10 +940,80 @@ void buffer_set_clear(buffer_set_t * buffer_set)
 
 void buffer_set_destroy(buffer_set_t * buffer_set)
 {
-    if (buffer_set->capacity > 0)
-    {
-        void * buffer = (((char*)buffer_set->buffer) + buffer_set->node_size);
-        free(buffer);
-    }
+    free(buffer_set->buffer);
     free(buffer_set);
+}
+
+int _buffer_set_verify(
+    buffer_set_t * buffer_set,
+    uint16_t idx,
+    int * height
+) {
+    struct node_s * node = _get_node(buffer_set, idx);
+    int left_height = 0;
+    if (node->left != NULL_IDX)
+    {
+        struct node_s * left_node = _get_node(buffer_set, node->left);
+        if (left_node->parent != idx)
+        {
+            printf("left_node->parent(%hu)!=idx(%hu)\n", left_node->parent, idx);
+            return -1;
+        }
+        const void * left_node_value = _node_get_value(left_node);
+        const int cmp = buffer_set->compar(left_node_value, _node_get_value(node));
+        assert(cmp < 0);
+        if (cmp >= 0)
+        {
+            printf("aaa");
+            return -1;
+        }
+        int rc = _buffer_set_verify(buffer_set, node->left, &left_height);
+        if (rc != 0)
+            return rc;
+    }
+
+    int right_height = 0;
+    if (node->right != NULL_IDX)
+    {
+        struct node_s * right_node = _get_node(buffer_set, node->right);
+        if (right_node->parent != idx)
+        {
+            printf("right_node->parent(%hu)!=idx(%hu)\n", right_node->parent, idx);
+            return -1;
+        }
+        const void * right_node_value = _node_get_value(right_node);
+        const int cmp = buffer_set->compar(_node_get_value(node), right_node_value);
+        assert(cmp < 0);
+        if (cmp >= 0)
+        {
+            printf("bbb");
+            return -1;
+        }
+        int rc = _buffer_set_verify(buffer_set, node->right, &right_height);
+        if (rc != 0)
+            return rc;
+    }
+
+    const int balance = (right_height - left_height);
+    //assert(node->balance == balance);
+
+    if (node->balance != balance)
+    {
+        printf("unexpected balance %hhd instead of %d for node %hu\n", node->balance, balance, idx);
+        return -1;
+    }
+
+    *height = (left_height > right_height) ? left_height : right_height;
+    *height += 1;
+    return 0;
+}
+
+int buffer_set_verify(buffer_set_t * buffer_set)
+{
+    if (buffer_set->root != NULL_IDX)
+    {
+        int height = 0;
+        return _buffer_set_verify(buffer_set, buffer_set->root, &height);
+    }
+    return 0;
 }
