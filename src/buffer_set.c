@@ -33,8 +33,8 @@
 
 struct node_s
 {
-    uint16_t parent;
     uint16_t left;
+    uint16_t parent;
     uint16_t right;
     int8_t balance;
 };
@@ -225,17 +225,6 @@ void * buffer_set_get_at(
     return _node_get_value(node);
 }
 
-static inline uint16_t _round_up_power_of_2(uint16_t value)
-{
-    value--;
-    value |= (value >> 1);
-    value |= (value >> 2);
-    value |= (value >> 4);
-    value |= (value >> 8);
-    value++;
-    return value;
-}
-
 buffer_set_iterator_t * buffer_set_find(
     buffer_set_t * buffer_set,
     const void * value
@@ -254,6 +243,17 @@ buffer_set_iterator_t * buffer_set_find(
         else
             return (buffer_set_iterator_t*) node;
     }
+}
+
+static inline uint16_t _round_up_power_of_2(uint16_t value)
+{
+    value--;
+    value |= (value >> 1);
+    value |= (value >> 2);
+    value |= (value >> 4);
+    value |= (value >> 8);
+    value++;
+    return value;
 }
 
 static uint16_t _calculate_new_capacity(uint16_t capacity)
@@ -360,7 +360,7 @@ static struct balance_result_s _balance_right(
         const uint16_t head_idx = _rotate_left(buffer_set, idx, node);
         struct node_s * head_node = _get_node(buffer_set, head_idx);
         assert((head_node->balance >= -1) && (head_node->balance <= 1));
-        /*
+#if defined(USE_REFERENCE_CODE)
         if (head_node->balance == 1)
         {
             right_node->balance = 0;
@@ -378,10 +378,11 @@ static struct balance_result_s _balance_right(
             node->balance = 0;
             head_node->balance = 0;
         }
-        */
+#else
         right_node->balance = (head_node->balance == -1) ? 1 : 0;
         node->balance = (head_node->balance == 1) ? -1 : 0;
         head_node->balance = 0;
+#endif
         return _make_balance_result(head_idx, 0);
     }
     else
@@ -390,7 +391,7 @@ static struct balance_result_s _balance_right(
         assert(_get_node(buffer_set, head_idx) == right_node);
         if (right_node->balance == 0)
         {
-            // can happen only on erase,
+            // can happen only on erase
             right_node->balance = -1;
             node->balance = 1;
             return _make_balance_result(head_idx, 1);
@@ -419,7 +420,7 @@ static struct balance_result_s _balance_left(
         const uint16_t head_idx = _rotate_right(buffer_set, idx, node);
         struct node_s * head_node = _get_node(buffer_set, head_idx);
         assert((head_node->balance >= -1) && (head_node->balance <= 1));
-        /*
+#if defined(USE_REFERENCE_CODE)
         if (head_node->balance == -1)
         {
             left_node->balance = 0;
@@ -437,10 +438,11 @@ static struct balance_result_s _balance_left(
             node->balance = 0;
             nr->balance = 0;
         }
-        */
+#else
         left_node->balance = (head_node->balance == 1) ? -1 : 0;
         node->balance = (head_node->balance == -1) ? 1 : 0;
         head_node->balance = 0;
+#endif
         return _make_balance_result(head_idx, 0);
     }
     else
@@ -477,13 +479,19 @@ static inline void _replace_child(
     else
     {
         struct node_s * node = _get_node(buffer_set, idx);
+#if defined(USE_REFERENCE_CODE)
         if (node->left == old_child)
             node->left = new_child;
         else
         {
-            assert(node->right == old_child);
+            assert(node->right == old_node);
             node->right = new_child;
         }
+#else
+        const int j = (node->left == old_child) ? -1 : 1;
+        assert((&node->parent)[j] == old_child);
+        (&node->parent)[j] = new_child;
+#endif
     }
 }
 
@@ -511,10 +519,8 @@ void * buffer_set_insert(
         }
 
         parent_idx = idx;
-        if (cmp < 0)
-            idx = node->left;
-        else // (cmp > 0)
-            idx = node->right;
+        cmp = (0 < cmp) - (cmp < 0); // cmp = sign(cmp)
+        idx = (&node->parent)[cmp];
     }
 
     idx = buffer_set->free_list;
@@ -558,8 +564,8 @@ void * buffer_set_insert(
     buffer_set->free_list = free_node->next;
 
     struct node_s * node = (struct node_s*) free_node;
-    node->parent = parent_idx;
     node->left = NULL_IDX;
+    node->parent = parent_idx;
     node->right = NULL_IDX;
     node->balance = 0;
     void * ret = _node_get_value(node);
@@ -574,6 +580,7 @@ void * buffer_set_insert(
     }
 
     struct node_s * parent_node = _get_node(buffer_set, parent_idx);
+#if defined(USE_REFERENCE_CODE)
     if (cmp < 0)
     {
         parent_node->left = idx;
@@ -593,44 +600,44 @@ void * buffer_set_insert(
             return ret;
         assert(balance == 1);
     }
+#else
+    (&parent_node->parent)[cmp] = idx;
+    parent_node->balance += cmp;
+    if (parent_node->balance == 0)
+        return ret;
+    assert(abs(parent_node->balance) == 1);
+#endif
 
-    uint16_t child_idx = parent_idx;
+    uint16_t from_idx = parent_idx;
     idx = parent_node->parent;
     while (idx != NULL_IDX)
     {
         node = _get_node(buffer_set, idx);
-        if (node->left == child_idx)
+        const int8_t balance_change = (node->left == from_idx) ? -1 : 1;
+        assert((&node->parent)[balance_change] == from_idx);
+        node->balance += balance_change;
+        if (node->balance == 0)
+            break;
+        else if (node->balance == -2)
         {
-            const int8_t balance = --node->balance;
-            if (balance == 0)
-                break;
-            else if (balance == -2)
-            {
-                const uint16_t parent_idx = node->parent;
-                const struct balance_result_s balance_result = _balance_left(buffer_set, idx, node);
-                assert(balance_result.height_changed == 0);
-                _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
-                break;
-            }
-            assert(balance == -1);
+            assert(node->left == from_idx);
+            const uint16_t parent_idx = node->parent;
+            const struct balance_result_s balance_result = _balance_left(buffer_set, idx, node);
+            assert(balance_result.height_changed == 0);
+            _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+            break;
         }
-        else
+        else if (node->balance == 2)
         {
-            assert(node->right == child_idx);
-            const int8_t balance = ++node->balance;
-            if (balance == 0)
-                break;
-            else if (balance == 2)
-            {
-                const uint16_t parent_idx = node->parent;
-                const struct balance_result_s balance_result = _balance_right(buffer_set, idx, node);
-                assert(balance_result.height_changed == 0);
-                _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
-                break;
-            }
-            assert(balance == 1);
+            assert(node->right == from_idx);
+            const uint16_t parent_idx = node->parent;
+            const struct balance_result_s balance_result = _balance_right(buffer_set, idx, node);
+            assert(balance_result.height_changed == 0);
+            _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+            break;
         }
-        child_idx = idx;
+        assert(abs(node->balance) == 1);
+        from_idx = idx;
         idx = node->parent;
     }
 
@@ -663,46 +670,36 @@ static void _rebalance(
     while (idx != NULL_IDX)
     {
         struct node_s * node = _get_node(buffer_set, idx);
-        if (node->left == from_child)
+        const int8_t balance_change = (node->left == from_child) ? -1 : 1;
+        node->balance -= balance_change;
+        if (abs(node->balance) == 1)
         {
-            const int8_t balance = ++node->balance;
-            if (balance == 2)
-            {
-                const uint16_t parent_idx = node->parent;
-                const struct balance_result_s balance_result = _balance_right(buffer_set, idx, node);
-                const uint16_t height_changed = !balance_result.height_changed;
-                if (height_changed)
-                    _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
-                else
-                    _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
-                break;
-            }
-            else if (balance == 1)
-            {
-                // stop balancing
-                break;
-            }
+            // stop balancing
+            break;
         }
-        else
+        else if (node->balance == 2)
+        {
+            assert(node->left == from_child);
+            const uint16_t parent_idx = node->parent;
+            const struct balance_result_s balance_result = _balance_right(buffer_set, idx, node);
+            const uint16_t height_changed = !balance_result.height_changed;
+            if (height_changed)
+                _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
+            else
+                _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+            break;
+        }
+        else if (node->balance == -2)
         {
             assert(node->right == from_child);
-            const int8_t balance = --node->balance;
-            if (balance == -2)
-            {
-                const uint16_t parent_idx = node->parent;
-                const struct balance_result_s balance_result = _balance_left(buffer_set, idx, node);
-                const uint16_t height_changed = !balance_result.height_changed;
-                if (height_changed)
-                    _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
-                else
-                    _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
-                break;
-            }
-            else if (balance == -1)
-            {
-                // stop balancing
-                break;
-            }
+            const uint16_t parent_idx = node->parent;
+            const struct balance_result_s balance_result = _balance_left(buffer_set, idx, node);
+            const uint16_t height_changed = !balance_result.height_changed;
+            if (height_changed)
+                _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
+            else
+                _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+            break;
         }
         assert(node->balance == 0);
         from_child = idx;
@@ -724,48 +721,37 @@ static void _replace_child_and_rebalance(
     else
     {
         struct node_s * node = _get_node(buffer_set, idx);
-        if (node->left == old_child)
+        const int8_t balance_change = (node->left == old_child) ? -1 : 1;
+        (&node->parent)[balance_change] = new_child;
+        node->balance -= balance_change;
+        if (abs(node->balance) == 1)
         {
-            node->left = new_child;
-            const int8_t balance = ++node->balance;
-            if (balance == 2)
-            {
-                const uint16_t parent_idx = node->parent;
-                const struct balance_result_s balance_result = _balance_right(buffer_set, idx, node);
-                const uint16_t height_changed = !balance_result.height_changed;
-                if (height_changed)
-                    _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
-                else
-                    _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
-                return;
-            }
-            else if (balance == 1)
-            {
-                // stop balancing
-                return;
-            }
+            // stop balancing
+            return;
         }
-        else
+        else if (node->balance == 2)
         {
-            assert(node->right == old_child);
-            node->right = new_child;
-            const int8_t balance = --node->balance;
-            if (balance == -2)
-            {
-                const uint16_t parent_idx = node->parent;
-                const struct balance_result_s balance_result = _balance_left(buffer_set, idx, node);
-                const uint16_t height_changed = !balance_result.height_changed;
-                if (height_changed)
-                    _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
-                else
-                    _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
-                return;
-            }
-            else if (balance == -1)
-            {
-                // stop balancing
-                return;
-            }
+            assert(node->left == new_child);
+            const uint16_t parent_idx = node->parent;
+            const struct balance_result_s balance_result = _balance_right(buffer_set, idx, node);
+            const uint16_t height_changed = !balance_result.height_changed;
+            if (height_changed)
+                _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
+            else
+                _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+            return;
+        }
+        else if (node->balance == -2)
+        {
+            assert(node->right == new_child);
+            const uint16_t parent_idx = node->parent;
+            const struct balance_result_s balance_result = _balance_left(buffer_set, idx, node);
+            const uint16_t height_changed = !balance_result.height_changed;
+            if (height_changed)
+                _replace_child_and_rebalance(buffer_set, parent_idx, idx, balance_result.idx);
+            else
+                _replace_child(buffer_set, parent_idx, idx, balance_result.idx);
+            return;
         }
         assert(node->balance == 0);
         const uint16_t parent = node->parent;
@@ -844,7 +830,7 @@ void * buffer_set_erase_at(
     {
         // node->left == NULL_IDX,
         // node->right can be either NULL_IDX or not
-        // since we have a special dummy node at offset 0,
+        // since we have a special dummy node at 0,
         // we can safely set the parent there instead of branching
         const uint16_t parent = node->parent;
         _get_node(buffer_set, node->right)->parent = parent;
@@ -995,7 +981,7 @@ int _buffer_set_verify(
     }
 
     const int balance = (right_height - left_height);
-    //assert(node->balance == balance);
+    // assert(node->balance == balance);
 
     if (node->balance != balance)
     {
