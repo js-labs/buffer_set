@@ -31,7 +31,7 @@ struct operation_s
     int value;
 };
 
-extern int int_cmp(const void * v1, const void * v2);
+extern int int_cmp(const void * v1, const void * v2, void * thunk);
 extern void int_printer(FILE * file, const void * v);
 
 #endif /* BUFFER_SET_TEST_H */

@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include "test.h"
 
-int int_cmp(const void * pv1, const void * pv2)
+int int_cmp(const void * pv1, const void * pv2, void * thunk)
 {
     const int v1 = *((const int*) pv1);
     const int v2 = *((const int*) pv2);

@@ -43,7 +43,7 @@ static int walk_callback(const void * value, void * arg)
 
 int walk()
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT, int_cmp);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT, &int_cmp, NULL);
     if (buffer_set == NULL)
     {
         printf("not enough memory");

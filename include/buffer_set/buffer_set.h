@@ -42,7 +42,8 @@ typedef struct buffer_set_iterator_s buffer_set_iterator_t;
 buffer_set_t * buffer_set_create(
     size_t value_size,
     uint16_t initial_capacity,
-    int (*compar)(const void * v1, const void * v2)
+    int (*compar)(const void * v1, const void * v2, void * thunk),
+    void * compar_thunk
 );
 
 uint16_t buffer_set_get_size(buffer_set_t * buffer_set);

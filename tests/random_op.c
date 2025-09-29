@@ -30,6 +30,18 @@ struct golden_set_s
     int * data;
 };
 
+static int bsearch_int_cmp(const void * pv1, const void * pv2)
+{
+    const int v1 = *((const int*) pv1);
+    const int v2 = *((const int*) pv2);
+    if (v1 < v2)
+        return -1;
+    else if (v2 < v1)
+        return 1;
+    else
+        return 0;
+}
+
 static int golden_set_init(struct golden_set_s * golden_set, size_t capacity)
 {
     golden_set->capacity = capacity;
@@ -109,6 +121,7 @@ static int history_init(struct history_s * history)
     history->head = malloc(sizeof(struct history_block_s));
     if (history->head)
     {
+        history->head->next = NULL;
         history->count = 0;
         history->tail = history->head;
         return 0;
@@ -138,11 +151,13 @@ static void history_append(
     {
         struct history_block_s * new_history_block = malloc(sizeof(struct history_block_s));
         new_history_block->next = NULL;
-        history->tail = new_history_block;
         history->count = 0;
+        history->tail = new_history_block;
+        history_block->next = new_history_block;
+        history_block = new_history_block;
     }
     const struct operation_s operation = { operation_type, value };
-    history->tail->operations[history->count] = operation;
+    history_block->operations[history->count] = operation;
     history->count++;
 }
 
@@ -196,7 +211,7 @@ int random_op()
         return -1;
     }
 
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), (uint16_t) MAX_ELEMENTS/4, int_cmp);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), (uint16_t) MAX_ELEMENTS/4, &int_cmp, NULL);
     int ret = 0;
 
     srand((unsigned int) time(NULL));
@@ -214,7 +229,7 @@ int random_op()
             int value = rand();
             for (;;)
             {
-                const void * ptr = bsearch(&value, golden_set.data, golden_set.size, sizeof(int), int_cmp);
+                const void * ptr = bsearch(&value, golden_set.data, golden_set.size, sizeof(int), &bsearch_int_cmp);
                 if (!ptr)
                     break;
                 value = rand();
