@@ -160,6 +160,11 @@ uint16_t buffer_set_get_size(buffer_set_t * buffer_set)
     return buffer_set->size;
 }
 
+uint16_t buffer_set_get_capacity(buffer_set_t * buffer_set)
+{
+    return buffer_set->capacity;
+}
+
 buffer_set_iterator_t * buffer_set_begin(buffer_set_t * buffer_set)
 {
     uint16_t idx = buffer_set->root;

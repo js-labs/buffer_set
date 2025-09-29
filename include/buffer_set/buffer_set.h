@@ -47,6 +47,7 @@ buffer_set_t * buffer_set_create(
 );
 
 uint16_t buffer_set_get_size(buffer_set_t * buffer_set);
+uint16_t buffer_set_get_capacity(buffer_set_t * buffer_set);
 
 buffer_set_iterator_t * buffer_set_begin(buffer_set_t * buffer_set);
 buffer_set_iterator_t * buffer_set_end(buffer_set_t * buffer_set);
