@@ -518,6 +518,11 @@ uint16_t buffer_set_get_size(buffer_set_t * buffer_set)
     return buffer_set->size;
 }
 
+uint16_t buffer_set_get_capacity(buffer_set_t * buffer_set)
+{
+    return buffer_set->capacity;
+}
+
 void * buffer_set_get(
     const buffer_set_t * buffer_set,
     const void * value
