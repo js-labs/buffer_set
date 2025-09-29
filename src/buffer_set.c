@@ -44,7 +44,8 @@ struct buffer_set_s
 {
     size_t value_size;
     size_t node_size;
-    int (*compar)(const void * v1, const void * v2);
+    int (*compar)(const void * v1, const void * v2, void * thunk);
+    void * compar_thunk;
     uint16_t capacity;
     uint16_t size;
     uint16_t root;
@@ -73,7 +74,7 @@ static inline struct free_node_s * _get_free_node(struct buffer_set_s * buffer_s
     return (struct free_node_s*) ptr;
 }
 
-static inline void * _get_node_value(struct node_s * node)
+static inline void * _node_get_value(struct node_s * node)
 {
     return ((char*)node) + _round(sizeof(struct node_s));
 }
@@ -101,7 +102,8 @@ static uint16_t _make_free_list(void * buffer, size_t node_size, uint16_t first_
 buffer_set_t * buffer_set_create(
     size_t value_size,
     uint16_t initial_capacity,
-    int (*compar)(const void * v1, const void * v2)
+    int (*compar)(const void * v1, const void * v2, void * thunk),
+    void * compar_thunk
 ) {
     if (initial_capacity > MAX_CAPACITY)
     {
@@ -121,6 +123,7 @@ buffer_set_t * buffer_set_create(
     buffer_set->value_size = value_size;
     buffer_set->node_size = node_size;
     buffer_set->compar = compar;
+    buffer_set->compar_thunk = compar_thunk;
     buffer_set->capacity = initial_capacity;
     buffer_set->size = 0;
     buffer_set->root = NULL_IDX;
@@ -209,7 +212,7 @@ static struct rebalance_result_s _balance_left(
         const uint16_t nr_idx = _rotate_right(buffer_set, idx, node);
         struct node_s * nr = _get_node(buffer_set, nr_idx);
         assert((nr->balance >= -1) && (nr->balance <= 1));
-        /*
+#if defined(USE_REFERENCE_CODE)
         if (nr->balance == -1)
         {
             left->balance = 0;
@@ -227,10 +230,11 @@ static struct rebalance_result_s _balance_left(
             node->balance = 0;
             nr->balance = 0;
         }
-        */
+#else
         left->balance = (nr->balance == 1) ? -1 : 0;
         node->balance = (nr->balance == -1) ? 1 : 0;
         nr->balance = 0;
+#endif
         return _make_rebalance_result(nr_idx, 0);
     }
     else
@@ -266,7 +270,7 @@ static struct rebalance_result_s _balance_right(
         const uint16_t nr_idx = _rotate_left(buffer_set, idx, node);
         struct node_s * nr = _get_node(buffer_set, nr_idx);
         assert((nr->balance >= -1) && (nr->balance <= 1));
-        /*
+#if defined(USE_REFERENCE_CODE)
         if (nr->balance == 1)
         {
             right->balance = 0;
@@ -284,10 +288,11 @@ static struct rebalance_result_s _balance_right(
             node->balance = 0;
             nr->balance = 0;
         }
-        */
+#else
         right->balance = (nr->balance == -1) ? 1 : 0;
         node->balance = (nr->balance == 1) ? -1 : 0;
         nr->balance = 0;
+#endif
         return _make_rebalance_result(nr_idx, 0);
     }
     else
@@ -433,7 +438,7 @@ static struct insert_result_s _buffer_set_insert(
     else
     {
         struct node_s * node = _get_node(buffer_set, idx);
-        int cmp = buffer_set->compar(value, _get_node_value(node));
+        int cmp = buffer_set->compar(value, _node_get_value(node), buffer_set->compar_thunk);
         if (cmp < 0)
         {
             const struct insert_result_s insert_result = _buffer_set_insert(buffer_set, value, node->left, value_node);
@@ -505,7 +510,7 @@ void * buffer_set_insert(
     *inserted = value_node.inserted;
 
     struct node_s * node = _get_node(buffer_set, value_node.idx);
-    return _get_node_value(node);
+    return _node_get_value(node);
 }
 
 uint16_t buffer_set_get_size(buffer_set_t * buffer_set)
@@ -523,13 +528,13 @@ void * buffer_set_get(
         if (idx == NULL_IDX)
             return NULL;
         struct node_s * node = _get_node(buffer_set, idx);
-        const int cmp = buffer_set->compar(value, _get_node_value(node));
+        const int cmp = buffer_set->compar(value, _node_get_value(node), buffer_set->compar_thunk);
         if (cmp < 0)
             idx = node->left;
         else if (cmp > 0)
             idx = node->right;
         else
-            return _get_node_value(node);
+            return _node_get_value(node);
     }
 }
 
@@ -558,7 +563,7 @@ static struct erase_result_s _erase(
     }
 
     struct node_s * node = _get_node(buffer_set, idx);
-    const int cmp = buffer_set->compar(value, _get_node_value(node));
+    const int cmp = buffer_set->compar(value, _node_get_value(node), buffer_set->compar_thunk);
     if (cmp < 0)
     {
         const struct erase_result_s erase_result = _erase(buffer_set, value, node->left, erased_idx);
@@ -642,7 +647,7 @@ static struct erase_result_s _erase(
                 tmp = _get_node(buffer_set, tmp_idx);
             }
 
-            const struct erase_result_s erase_result = _erase(buffer_set, _get_node_value(tmp), node->right, erased_idx);
+            const struct erase_result_s erase_result = _erase(buffer_set, _node_get_value(tmp), node->right, erased_idx);
             assert(*erased_idx == tmp_idx);
             *erased_idx = idx;
 
@@ -694,7 +699,7 @@ const void * buffer_set_erase(
     free_node->next = buffer_set->free_list;
     buffer_set->free_list = erased_idx;
 
-    return _get_node_value(node);
+    return _node_get_value(node);
 }
 
 struct walk_context_s
@@ -719,7 +724,7 @@ static int _buffer_set_walk(
             return rc;
     }
 
-    rc = context->func(_get_node_value(node), context->arg);
+    rc = context->func(_node_get_value(node), context->arg);
     if (rc)
         return rc;
 
@@ -750,7 +755,7 @@ static void _print_debug(
 ) {
     struct node_s * node = _get_node(buffer_set, idx);
     fprintf(file, "    %hu[", idx);
-    value_printer(file, _get_node_value(node));
+    value_printer(file, _node_get_value(node));
 
     fprintf(file, "]: left=");
     if (node->left == NULL_IDX)

@@ -27,7 +27,7 @@ static const struct operation_s operations[] =
 
 int reg()
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 16, int_cmp);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 16, &int_cmp, NULL);
     if (!buffer_set)
     {
         printf("buffer_set_create() failed");

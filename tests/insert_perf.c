@@ -76,7 +76,7 @@ static unsigned int test_stdlib()
 
 #endif
 
-static int buffer_set_cmp(const void * pv1, const void * pv2)
+static int buffer_set_cmp(const void * pv1, const void * pv2, void * thunk)
 {
     const int v1 = *((const int*) pv1);
     const int v2 = *((const int*) pv2);
@@ -90,7 +90,7 @@ static int buffer_set_cmp(const void * pv1, const void * pv2)
 
 static unsigned int test_buffer_set()
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT, buffer_set_cmp);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT, &buffer_set_cmp, NULL);
     if (buffer_set == NULL)
     {
         printf("not enough memory");
