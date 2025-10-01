@@ -118,8 +118,12 @@ void buffer_set_print_debug(
     void (*value_printer)(FILE * file, const void * value)
 );
 
+int buffer_set_verify(
+    buffer_set_t * buffer_set,
+    FILE * file
+);
+
 void buffer_set_clear(buffer_set_t * buffer_set);
-int  buffer_set_verify(buffer_set_t * buffer_set);
 void buffer_set_destroy(buffer_set_t * buffer_set);
 
 #if defined(__cplusplus)

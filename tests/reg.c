@@ -241,7 +241,7 @@ static int run_test(const struct operation_s * operations, const int * golden_se
         }
         //buffer_set_print_debug(buffer_set, stdout, int_printer);
         //printf("\n");
-        rc = buffer_set_verify(buffer_set);
+        rc = buffer_set_verify(buffer_set, stdout);
         if (rc != 0)
             break;
     }

@@ -244,13 +244,11 @@ buffer_set_iterator_t * buffer_set_find(
         if (idx == NULL_IDX)
             return buffer_set_end(buffer_set);
         struct node_s * node = _get_node(buffer_set, idx);
-        const int cmp = buffer_set->compar(value, _node_get_value(node), compar_thunk);
-        if (cmp < 0)
-            idx = node->left;
-        else if (cmp > 0)
-            idx = node->right;
-        else
+        int cmp = buffer_set->compar(value, _node_get_value(node), compar_thunk);
+        if (cmp == 0)
             return (buffer_set_iterator_t*) node;
+        cmp = (0 < cmp) - (cmp < 0); // cmp = sign(cmp)
+        idx = (&node->parent)[cmp];
     }
 }
 
@@ -908,6 +906,89 @@ void buffer_set_print_debug(
     fprintf(file, "}");
 }
 
+static int _buffer_set_verify(
+    buffer_set_t * buffer_set,
+    FILE * file,
+    uint16_t idx,
+    int * height
+) {
+    struct node_s * node = _get_node(buffer_set, idx);
+    int left_height = 0;
+    if (node->left != NULL_IDX)
+    {
+        struct node_s * left_node = _get_node(buffer_set, node->left);
+        if (left_node->parent != idx)
+        {
+            fprintf(file, "left_node->parent(%hu)!=idx(%hu)\n", left_node->parent, idx);
+            return -1;
+        }
+        const int cmp = buffer_set->compar(
+            _node_get_value(left_node),
+            _node_get_value(node),
+            buffer_set->compar_thunk
+        );
+        assert(cmp < 0);
+        if (cmp >= 0)
+        {
+            fprintf(file, "left node (%hu) value is not less than value in (%hu)\n", node->left, idx);
+            return -1;
+        }
+        int rc = _buffer_set_verify(buffer_set, file, node->left, &left_height);
+        if (rc != 0)
+            return rc;
+    }
+
+    int right_height = 0;
+    if (node->right != NULL_IDX)
+    {
+        struct node_s * right_node = _get_node(buffer_set, node->right);
+        if (right_node->parent != idx)
+        {
+            fprintf(file, "right_node->parent(%hu)!=idx(%hu)\n", right_node->parent, idx);
+            return -1;
+        }
+        const int cmp = buffer_set->compar(
+            _node_get_value(node),
+            _node_get_value(right_node),
+            buffer_set->compar_thunk
+        );
+        assert(cmp < 0);
+        if (cmp >= 0)
+        {
+            fprintf(file, "right node (%hu) value is not greater than value in (%hu)\n", node->left, idx);
+            return -1;
+        }
+        int rc = _buffer_set_verify(buffer_set, file, node->right, &right_height);
+        if (rc != 0)
+            return rc;
+    }
+
+    const int balance = (right_height - left_height);
+    // assert(node->balance == balance);
+
+    if (node->balance != balance)
+    {
+        fprintf(file, "unexpected balance %hhd instead of %d for node %hu\n", node->balance, balance, idx);
+        return -1;
+    }
+
+    *height = (left_height > right_height) ? left_height : right_height;
+    *height += 1;
+    return 0;
+}
+
+int buffer_set_verify(
+    buffer_set_t * buffer_set,
+    FILE * file
+) {
+    if (buffer_set->root != NULL_IDX)
+    {
+        int height = 0;
+        return _buffer_set_verify(buffer_set, file, buffer_set->root, &height);
+    }
+    return 0;
+}
+
 static uint16_t _buffer_set_clear(
     struct buffer_set_s * buffer_set,
     uint16_t free_list,
@@ -938,86 +1019,4 @@ void buffer_set_destroy(buffer_set_t * buffer_set)
 {
     free(buffer_set->buffer);
     free(buffer_set);
-}
-
-int _buffer_set_verify(
-    buffer_set_t * buffer_set,
-    uint16_t idx,
-    int * height
-) {
-    struct node_s * node = _get_node(buffer_set, idx);
-    int left_height = 0;
-    if (node->left != NULL_IDX)
-    {
-        struct node_s * left_node = _get_node(buffer_set, node->left);
-        if (left_node->parent != idx)
-        {
-            printf("left_node->parent(%hu)!=idx(%hu)\n", left_node->parent, idx);
-            return -1;
-        }
-        const void * left_node_value = _node_get_value(left_node);
-        const int cmp = buffer_set->compar(
-            left_node_value,
-            _node_get_value(node),
-            buffer_set->compar_thunk
-        );
-        assert(cmp < 0);
-        if (cmp >= 0)
-        {
-            printf("aaa");
-            return -1;
-        }
-        int rc = _buffer_set_verify(buffer_set, node->left, &left_height);
-        if (rc != 0)
-            return rc;
-    }
-
-    int right_height = 0;
-    if (node->right != NULL_IDX)
-    {
-        struct node_s * right_node = _get_node(buffer_set, node->right);
-        if (right_node->parent != idx)
-        {
-            printf("right_node->parent(%hu)!=idx(%hu)\n", right_node->parent, idx);
-            return -1;
-        }
-        const void * right_node_value = _node_get_value(right_node);
-        const int cmp = buffer_set->compar(
-            _node_get_value(node),
-            right_node_value,
-            buffer_set->compar_thunk
-        );
-        assert(cmp < 0);
-        if (cmp >= 0)
-        {
-            printf("bbb");
-            return -1;
-        }
-        int rc = _buffer_set_verify(buffer_set, node->right, &right_height);
-        if (rc != 0)
-            return rc;
-    }
-
-    const int balance = (right_height - left_height);
-    // assert(node->balance == balance);
-
-    if (node->balance != balance)
-    {
-        printf("unexpected balance %hhd instead of %d for node %hu\n", node->balance, balance, idx);
-        return -1;
-    }
-
-    *height = (left_height > right_height) ? left_height : right_height;
-    *height += 1;
-    return 0;
-}
-
-int buffer_set_verify(buffer_set_t * buffer_set)
-{
-    if (buffer_set->root != NULL_IDX)
-    {
-        int height = 0;
-        return _buffer_set_verify(buffer_set, buffer_set->root, &height);
-    }
-    return 0;
 }
