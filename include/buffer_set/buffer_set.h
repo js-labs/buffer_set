@@ -32,12 +32,12 @@ typedef struct buffer_set_iterator_s buffer_set_iterator_t;
  * Initializes a buffer set capable of storing values of the specified size,
  * with an initial capacity and a user-provided comparison function.
  *
- * If the initial capacity is greater than the maximum capacity (65,534),
- * the function returns NULL and sets errno to EINVAL.
- *
+ * @param value_size       Size of each value stored in the set.
+ * @param initial_capacity Initial number of elements the buffer can hold.
+ * @param compar           Comparison function for stored values.
+ * @param compar_thunk     User-provided data passed to compar.
  * @return
- * A pointer to the newly created buffer set, or NULL if memory allocation fails
- * or if the initial capacity is greater than 65,534.
+ * A pointer to the newly created buffer set, or NULL if memory allocation fails.
  */
 buffer_set_t * buffer_set_create(
     size_t value_size,
@@ -62,14 +62,14 @@ void * buffer_set_get(
     const void * value
 );
 
-void * buffer_set_get_at(
-    buffer_set_t * buffer_set,
-    buffer_set_iterator_t * it
-);
-
 buffer_set_iterator_t * buffer_set_find(
     buffer_set_t * buffer_set,
     const void * value
+);
+
+void * buffer_set_get_at(
+    buffer_set_t * buffer_set,
+    buffer_set_iterator_t * it
 );
 
 /**
@@ -77,7 +77,7 @@ buffer_set_iterator_t * buffer_set_find(
  *
  * @return
  * A pointer to the value in the set, or NULL if an error occurred
- * (e.g., memory allocation failure or the set has reached its maximum possible size of 65,534 elements).
+ * (e.g., memory allocation failure or the set has reached its maximum possible size).
  *
  * @note
  * The function uses the provided value only for searching within the buffer set. 
@@ -102,6 +102,14 @@ void * buffer_set_insert(
     int * inserted
 );
 
+/**
+ * Erase the value from the set.
+ *
+ * @return
+ * A pointer to the value in the set that was erased, or NULL if the value
+ * was not found. The erased value can be accessed until a subsequent insertion
+ * operation reuses the node.
+ */
 void * buffer_set_erase(
     buffer_set_t * buffer_set,
     const void * value

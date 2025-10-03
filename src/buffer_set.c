@@ -23,7 +23,7 @@
 // Small optimization: because the NULL index is defined as 0, buffer element 0
 // is reserved and never used. To simplify access (eliminating the need to subtract 1 from indices),
 // we set a pointer to just before the actual buffer start. This way, buffer[1]
-// maps directly to the first real element (buffer[0]), buffer[2] to the second, etc.,
+// maps directly to the first real element, buffer[2] to the second, etc.,
 // streamlining index calculations.
 
 #define NULL_IDX (0)
