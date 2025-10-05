@@ -31,9 +31,11 @@ typedef struct buffer_set_iterator_s buffer_set_iterator_t;
  *
  * Initializes a buffer set capable of storing values of the specified size,
  * with an initial capacity and a user-provided comparison function.
+ * Note: One slot in the buffer is always reserved for internal use,
+ * so the usable capacity is one less than the specified value.
  *
- * @param value_size       Size of each value stored in the set.
- * @param initial_capacity Initial number of elements the buffer can hold.
+ * @param value_size       The size of each value stored in the set.
+ * @param initial_capacity The initial number of elements the buffer can hold.
  * @param compar           Comparison function for stored values.
  * @param compar_thunk     User-provided data passed to compar.
  * @return
