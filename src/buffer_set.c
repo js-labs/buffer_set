@@ -33,8 +33,8 @@
 
 struct node_s
 {
-    uint16_t left;
     uint16_t parent;
+    uint16_t left;
     uint16_t right;
     int8_t balance;
 };
@@ -244,11 +244,11 @@ buffer_set_iterator_t * buffer_set_find(
         if (idx == NULL_IDX)
             return buffer_set_end(buffer_set);
         struct node_s * node = _get_node(buffer_set, idx);
-        int cmp = buffer_set->compar(value, _node_get_value(node), compar_thunk);
+        const int cmp = buffer_set->compar(value, _node_get_value(node), compar_thunk);
         if (cmp == 0)
             return (buffer_set_iterator_t*) node;
-        cmp = (0 < cmp) - (cmp < 0); // cmp = sign(cmp)
-        idx = (&node->parent)[cmp];
+        const int side = ((cmp > 0) ? 1 : 0);
+        idx = (&node->left)[side];
     }
 }
 
@@ -495,9 +495,9 @@ static inline void _replace_child(
             node->right = new_child;
         }
 #else
-        const int j = (node->left == old_child) ? -1 : 1;
-        assert((&node->parent)[j] == old_child);
-        (&node->parent)[j] = new_child;
+        const int side = ((node->left == old_child) ? 0 : 1);
+        assert((&node->left)[side] == old_child);
+        (&node->left)[side] = new_child;
 #endif
     }
 }
@@ -527,8 +527,8 @@ void * buffer_set_insert(
         }
 
         parent_idx = idx;
-        cmp = (0 < cmp) - (cmp < 0); // cmp = sign(cmp)
-        idx = (&node->parent)[cmp];
+        const int side = ((cmp > 0) ? 1 : 0);
+        idx = (&node->left)[side];
     }
 
     idx = buffer_set->free_list;
@@ -609,8 +609,10 @@ void * buffer_set_insert(
         assert(balance == 1);
     }
 #else
-    (&parent_node->parent)[cmp] = idx;
-    parent_node->balance += cmp;
+    const int side = ((cmp > 0) ? 1 : 0);
+    (&parent_node->left)[side] = idx;
+    parent_node->balance += ((cmp > 0) ? 1 : 0);
+    parent_node->balance -= ((cmp < 0) ? 1 : 0);
     if (parent_node->balance == 0)
         return ret;
     assert(abs(parent_node->balance) == 1);
@@ -621,9 +623,7 @@ void * buffer_set_insert(
     while (idx != NULL_IDX)
     {
         node = _get_node(buffer_set, idx);
-        const int8_t balance_change = (node->left == from_idx) ? -1 : 1;
-        assert((&node->parent)[balance_change] == from_idx);
-        node->balance += balance_change;
+        node->balance += ((node->left == from_idx) ? -1 : 1);
         if (node->balance == 0)
             break;
         else if (node->balance == -2)
@@ -729,8 +729,9 @@ static void _replace_child_and_rebalance(
     else
     {
         struct node_s * node = _get_node(buffer_set, idx);
-        const int8_t balance_change = (node->left == old_child) ? -1 : 1;
-        (&node->parent)[balance_change] = new_child;
+        const int8_t balance_change = ((node->left == old_child) ? -1 : 1);
+        const int side = ((node->left == old_child) ? 0 : 1);
+        (&node->left)[side] = new_child;
         node->balance -= balance_change;
         if (abs(node->balance) == 1)
         {

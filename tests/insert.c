@@ -36,6 +36,7 @@ int insert()
         {
             printf("unexpected 'inserted' result: %d, it should be non-zero", inserted);
             ret = -1;
+            break;
         }
         else
         {
@@ -48,22 +49,31 @@ int insert()
                 {
                     printf("different value address on update");
                     ret = -1;
+                    break;
                 }
             }
             else
             {
-                printf("unexpected 'inserted' result: %d, it should be zero", inserted);
+                printf(
+                    "unexpected 'inserted' result: %d on inserting %d, it should be zero",
+                    inserted,
+                    value
+                );
                 ret = -1;
+                break;
             }
         }
     }
 
-    buffer_set_iterator_t * it = buffer_set_begin(buffer_set);
-    buffer_set_iterator_t * it_end = buffer_set_end(buffer_set);
-    while (it != it_end)
+    if (ret == 0)
     {
-        const int value = *((const int*) buffer_set_get_at(buffer_set, it));
-        it = buffer_set_iterator_next(buffer_set, it);
+        buffer_set_iterator_t * it = buffer_set_begin(buffer_set);
+        buffer_set_iterator_t * it_end = buffer_set_end(buffer_set);
+        while (it != it_end)
+        {
+            const int value = *((const int*) buffer_set_get_at(buffer_set, it));
+            it = buffer_set_iterator_next(buffer_set, it);
+        }
     }
 
     buffer_set_destroy(buffer_set);
