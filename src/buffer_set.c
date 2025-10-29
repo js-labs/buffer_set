@@ -46,10 +46,9 @@ struct free_node_s
 
 struct buffer_set_s
 {
-    size_t value_size;
     size_t node_size;
     int (*compar)(const void * v1, const void * v2, void * thunk);
-    void * compar_thunk;
+    void * thunk;
     uint16_t capacity;
     uint16_t size;
     uint16_t root;
@@ -115,7 +114,7 @@ buffer_set_t * buffer_set_create(
     size_t value_size,
     uint16_t initial_capacity,
     int (*compar)(const void * v1, const void * v2, void * thunk),
-    void * compar_thunk
+    void * thunk
 ) {
     struct buffer_set_s * buffer_set = malloc(sizeof(struct buffer_set_s));
     if (buffer_set == NULL)
@@ -126,10 +125,9 @@ buffer_set_t * buffer_set_create(
 
     const size_t node_size = _round(sizeof(struct node_s)) + _round(value_size);
 
-    buffer_set->value_size = value_size;
     buffer_set->node_size = node_size;
     buffer_set->compar = compar;
-    buffer_set->compar_thunk = compar_thunk;
+    buffer_set->thunk = thunk;
     buffer_set->capacity = initial_capacity;
     buffer_set->size = 0;
     buffer_set->root = NULL_IDX;
@@ -237,14 +235,13 @@ buffer_set_iterator_t * buffer_set_find(
     buffer_set_t * buffer_set,
     const void * value
 ) {
-    void * compar_thunk = buffer_set->compar_thunk;
     uint16_t idx = buffer_set->root;
     for (;;)
     {
         if (idx == NULL_IDX)
             return buffer_set_end(buffer_set);
         struct node_s * node = _get_node(buffer_set, idx);
-        const int cmp = buffer_set->compar(value, _node_get_value(node), compar_thunk);
+        const int cmp = buffer_set->compar(value, _node_get_value(node), buffer_set->thunk);
         if (cmp == 0)
             return (buffer_set_iterator_t*) node;
         const int side = ((cmp > 0) ? 1 : 0);
@@ -507,7 +504,6 @@ void * buffer_set_insert(
     const void * value,
     int * inserted
 ) {
-    void * compar_thunk = buffer_set->compar_thunk;
     uint16_t parent_idx = NULL_IDX;
     uint16_t idx = buffer_set->root;
     int cmp;
@@ -519,7 +515,7 @@ void * buffer_set_insert(
 
         struct node_s * node = _get_node(buffer_set, idx);
         void * node_value = _node_get_value(node);
-        cmp = buffer_set->compar(value, node_value, compar_thunk);
+        cmp = buffer_set->compar(value, node_value, buffer_set->thunk);
         if (cmp == 0)
         {
             *inserted = 0;
@@ -926,7 +922,7 @@ static int _buffer_set_verify(
         const int cmp = buffer_set->compar(
             _node_get_value(left_node),
             _node_get_value(node),
-            buffer_set->compar_thunk
+            buffer_set->thunk
         );
         assert(cmp < 0);
         if (cmp >= 0)
@@ -951,7 +947,7 @@ static int _buffer_set_verify(
         const int cmp = buffer_set->compar(
             _node_get_value(node),
             _node_get_value(right_node),
-            buffer_set->compar_thunk
+            buffer_set->thunk
         );
         assert(cmp < 0);
         if (cmp >= 0)
