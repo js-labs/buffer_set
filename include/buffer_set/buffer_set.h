@@ -117,6 +117,14 @@ void * buffer_set_erase(
     const void * value
 );
 
+/**
+ * Erase the value at the position pointed to by the iterator from the set.
+ *
+ * @return
+ * A pointer to the value that was erased, or NULL if the iterator did not
+ * point to a value in the set. The erased value can be accessed until
+ * a subsequent insertion operation reuses the node.
+ */
 void * buffer_set_erase_at(
     buffer_set_t * buffer_set,
     buffer_set_iterator_t * it
