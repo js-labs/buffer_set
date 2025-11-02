@@ -134,6 +134,7 @@ static const struct operation_s test_05[] = {
     { operation_type_insert, 69 },
     { operation_type_insert, 15 },
     { operation_type_erase,  75 },
+    { 0, 0 }
 };
 
 static const int test_06_gs[] = { 42, 43, 63, 79, 149, 210, -1 };
