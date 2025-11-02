@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(buffer_set)
+project(buffer_set LANGUAGES C)
 
 option(BUILD_TESTS "Build tests" ON)
 option(CODE_COVERAGE "Enable code coverage reporting" OFF)
