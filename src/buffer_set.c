@@ -304,6 +304,7 @@ static inline uint16_t _rotate_right(
     // a_node->left can be NULL_IDX,
     // but since we have a special dummy node at offset 0,
     // we can safely set the parent there instead of branching
+    // even if a_node->left == 0
     _get_node(buffer_set, a_node->left)->parent = a_idx;
     b_node->parent = parent_idx;
     b_node->right = a_idx;
@@ -330,6 +331,7 @@ static inline uint16_t _rotate_left(
     // a_node->right can be NULL_IDX,
     // but since we have a special dummy node at offset 0,
     // we can safely set the parent there instead of branching
+    // even if a_node->right == 0
     _get_node(buffer_set, a_node->right)->parent = a_idx;
     b_node->parent = parent_idx;
     b_node->left = a_idx;
