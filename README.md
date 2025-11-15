@@ -11,7 +11,7 @@ The tree rebalancing implementation is based on the AVL (Adelson-Velsky and Land
 # Usage
 Creating an instace of set:
 ```C
-int int_cmp(const void * pv1, const void * pv2)
+int int_cmp(const void * pv1, const void * pv2, void * thunk)
 {
     const int v1 = *((const int*) pv1);
     const int v2 = *((const int*) pv2);
@@ -23,7 +23,7 @@ int int_cmp(const void * pv1, const void * pv2)
         return 0;
 }
 ...
-buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 16/*initial capacity*/, &int_cmp);
+buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 16/*initial capacity*/, &int_cmp, /*thunk*/NULL);
 ```
 Inserting a new element:
 ```C
