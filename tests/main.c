@@ -41,6 +41,7 @@ int iterator_next();
 int max_capacity();
 int print_debug();
 int random_op();
+int realloc_move();
 int reg();
 
 void run_test(int * failed_tests, const char * name, int (*test_func)())
@@ -67,6 +68,7 @@ int main(int argc, const char * argv[])
     RUN_TEST(insert);
     RUN_TEST(iterator_next);
     RUN_TEST(max_capacity);
+    RUN_TEST(realloc_move);
     RUN_TEST(print_debug);
     RUN_TEST(random_op);
     RUN_TEST(reg);

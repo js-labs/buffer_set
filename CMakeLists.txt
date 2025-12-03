@@ -29,6 +29,7 @@ if(BUILD_TESTS)
         tests/max_capacity.c
         tests/print_debug.c
         tests/random_op.c
+        tests/realloc_move.c
         tests/reg.c
     )
 

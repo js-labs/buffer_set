@@ -215,7 +215,7 @@ static const struct operation_s test_10[] =
 
 static int run_test(const struct operation_s * operations, const int * golden_set)
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 16, &int_cmp, NULL);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 16, &int_cmp, NULL, NULL);
     if (!buffer_set)
     {
         printf("buffer_set_create() failed");

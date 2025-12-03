@@ -22,7 +22,7 @@
 
 int iterator_next()
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT, &int_cmp, NULL);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT, &int_cmp, NULL, NULL);
     if (buffer_set == NULL)
     {
         printf("not enough memory");

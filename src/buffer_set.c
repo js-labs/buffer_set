@@ -48,6 +48,7 @@ struct buffer_set_s
 {
     size_t node_size;
     int (*compar)(const void * v1, const void * v2, void * thunk);
+    void (*move)(void * dst, void * src, void * thunk);
     void * thunk;
     uint16_t capacity;
     uint16_t size;
@@ -114,6 +115,7 @@ buffer_set_t * buffer_set_create(
     size_t value_size,
     uint16_t initial_capacity,
     int (*compar)(const void * v1, const void * v2, void * thunk),
+    void (*move)(void * dst, void * src, void * thunk),
     void * thunk
 ) {
     struct buffer_set_s * buffer_set = malloc(sizeof(struct buffer_set_s));
@@ -127,6 +129,7 @@ buffer_set_t * buffer_set_create(
 
     buffer_set->node_size = node_size;
     buffer_set->compar = compar;
+    buffer_set->move = move;
     buffer_set->thunk = thunk;
     buffer_set->capacity = initial_capacity;
     buffer_set->size = 0;
@@ -542,17 +545,30 @@ void * buffer_set_insert(
         if (!buffer)
             return NULL;
 
-        buffer_set->capacity = new_capacity;
-
-        if (buffer_set->size > 0)
+        if (buffer_set->capacity > 0)
         {
-            memcpy(
-                ((char*)buffer) + buffer_set->node_size,
-                ((const char*)buffer_set->buffer) + buffer_set->node_size,
-                buffer_set->size * buffer_set->node_size
-            );
+            void (*move)(void*, void*, void*) = buffer_set->move;
+            if (move)
+            {
+                void * thunk = buffer_set->thunk;
+                const size_t node_size = buffer_set->node_size;
+                size_t offs = node_size;
+                for (size_t idx=1; idx<buffer_set->capacity; idx++, offs += node_size)
+                {
+                    struct node_s * src_node = (void*) (((char*) buffer_set->buffer) + offs);
+                    struct node_s * dst_node = (void*) (((char*) buffer) + offs);
+                    *dst_node = *src_node;
+                    void * src_value = ((char*) src_node) + _round(sizeof(struct node_s));
+                    void * dst_value = ((char*) dst_node) + _round(sizeof(struct node_s));
+                    move(dst_value, src_value, thunk);
+                }
+            }
+            else
+                memcpy(buffer, buffer_set->buffer, buffer_set->capacity * buffer_set->node_size);
         }
+
         free(buffer_set->buffer);
+        buffer_set->capacity = new_capacity;
         buffer_set->buffer = buffer;
 
         buffer_set->free_list = _make_free_list(

@@ -90,7 +90,7 @@ static int buffer_set_cmp(const void * pv1, const void * pv2, void * thunk)
 
 static unsigned int test_buffer_set()
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT+1, &buffer_set_cmp, NULL);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), COUNT+1, &buffer_set_cmp, NULL, NULL);
     if (buffer_set == NULL)
     {
         printf("not enough memory");

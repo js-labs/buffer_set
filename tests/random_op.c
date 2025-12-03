@@ -211,7 +211,13 @@ int random_op()
         return -1;
     }
 
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), (uint16_t) MAX_ELEMENTS/4, &int_cmp, NULL);
+    buffer_set_t * buffer_set = buffer_set_create(
+        sizeof(int),
+        (uint16_t) MAX_ELEMENTS/4,
+        &int_cmp,
+        NULL,
+        NULL
+    );
     int ret = 0;
 
     srand((unsigned int) time(NULL));

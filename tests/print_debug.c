@@ -25,7 +25,7 @@ static void value_printer(FILE * file, const void * value)
 
 int print_debug()
 {
-    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 0, &int_cmp, NULL);
+    buffer_set_t * buffer_set = buffer_set_create(sizeof(int), 0, &int_cmp, NULL, NULL);
     if (buffer_set == NULL)
     {
         printf("buffer_set_create() failed");

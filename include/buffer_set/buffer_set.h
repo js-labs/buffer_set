@@ -37,6 +37,7 @@ typedef struct buffer_set_iterator_s buffer_set_iterator_t;
  * @param value_size       The size of each value stored in the set.
  * @param initial_capacity The initial number of elements the buffer can hold.
  * @param compar           Comparison function for stored values.
+ * @param move             Move function for stored values.
  * @param thunk            User-provided data passed to compar.
  * @return
  * A pointer to the newly created buffer set, or NULL if memory allocation fails.
@@ -45,6 +46,7 @@ buffer_set_t * buffer_set_create(
     size_t value_size,
     uint16_t initial_capacity,
     int (*compar)(const void * v1, const void * v2, void * thunk),
+    void (*move)(void * dst, void * src, void * thunk),
     void * thunk
 );
 
