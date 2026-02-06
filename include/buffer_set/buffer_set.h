@@ -143,6 +143,7 @@ int buffer_set_verify(
     FILE * file
 );
 
+void buffer_set_shrink(buffer_set_t * buffer_set);
 void buffer_set_clear(buffer_set_t * buffer_set);
 void buffer_set_destroy(buffer_set_t * buffer_set);
 

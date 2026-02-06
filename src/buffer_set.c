@@ -1019,6 +1019,92 @@ static uint16_t _buffer_set_clear(
     return idx;
 }
 
+static uint16_t _buffer_set_move_tree(
+    buffer_set_t * buffer_set,
+    uint16_t src_idx,
+    void * src_buffer
+) {
+    uint16_t idx = ++buffer_set->size;
+    size_t node_size = buffer_set->node_size;
+    struct node_s * dst_node = _get_node(buffer_set, idx);
+    struct node_s * src_node = (void*) (((char*)src_buffer) + (src_idx * node_size));
+
+    uint16_t left = src_node->left;
+    if (left != NULL_IDX)
+    {
+        left = _buffer_set_move_tree(buffer_set, left, src_buffer);
+        struct node_s * left_node = _get_node(buffer_set, left);
+        left_node->parent = idx;
+    }
+    dst_node->left = left;
+
+    uint16_t right = src_node->right;
+    if (right != NULL_IDX)
+    {
+        right = _buffer_set_move_tree(buffer_set, right, src_buffer);
+        dst_node->right = right;
+        struct node_s * right_node = _get_node(buffer_set, right);
+        right_node->parent = idx;
+    }
+    dst_node->right = right;
+
+    dst_node->balance = src_node->balance;
+
+    void (*move)(void*, void*, void*) = buffer_set->move;
+    if (move == NULL)
+    {
+        size_t value_size = (node_size - _round(sizeof(struct node_s)));
+        memcpy(
+            _node_get_value(dst_node),
+            _node_get_value(src_node),
+            value_size
+        );
+    }
+    else
+        move(dst_node, src_node, buffer_set->thunk);
+
+    return idx;
+}
+
+void buffer_set_shrink(buffer_set_t * buffer_set)
+{
+    uint16_t new_capacity = buffer_set->capacity;
+    while ((buffer_set->size + 1) < (new_capacity / 4))
+        new_capacity /= 2;
+
+    if (new_capacity < MIN_CAPACITY)
+    {
+        new_capacity = MIN_CAPACITY;
+        if (new_capacity >= buffer_set->capacity)
+            return;
+    }
+
+    void * buffer = malloc(buffer_set->node_size * new_capacity);
+    if (buffer == NULL)
+        return;
+
+    void * old_buffer = buffer_set->buffer;
+    buffer_set->buffer = buffer;
+    buffer_set->capacity = new_capacity;
+
+    uint16_t root = buffer_set->root;
+    if (root != NULL_IDX)
+    {
+        buffer_set->size = 0;
+        root = _buffer_set_move_tree(buffer_set, root, old_buffer);
+        buffer_set->root = root;
+    }
+
+    free(old_buffer);
+
+    buffer_set->free_list = _make_free_list(
+        buffer,
+        buffer_set->node_size,
+        buffer_set->size + 1,
+        (new_capacity - buffer_set->size - 1)
+    );
+}
+
 void buffer_set_clear(buffer_set_t * buffer_set)
 {
     const uint16_t root = buffer_set->root;
