@@ -1042,7 +1042,6 @@ static uint16_t _buffer_set_move_tree(
     if (right != NULL_IDX)
     {
         right = _buffer_set_move_tree(buffer_set, right, src_buffer);
-        dst_node->right = right;
         struct node_s * right_node = _get_node(buffer_set, right);
         right_node->parent = idx;
     }
@@ -1093,6 +1092,8 @@ void buffer_set_shrink(buffer_set_t * buffer_set)
         buffer_set->size = 0;
         root = _buffer_set_move_tree(buffer_set, root, old_buffer);
         buffer_set->root = root;
+        struct node_s * node = _get_node(buffer_set, root);
+        node->parent = NULL_IDX;
     }
 
     free(old_buffer);

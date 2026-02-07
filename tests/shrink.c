@@ -39,7 +39,36 @@ int shrink()
 
     buffer_set_shrink(buffer_set);
 
+    int rc = 0;
+    buffer_set_iterator_t * it = buffer_set_begin(buffer_set);
+
+    for (int idx=50; idx<63; idx++)
+    {
+        if (it == buffer_set_end(buffer_set))
+        {
+            fprintf(stderr, "unexpected iterator end\n");
+            rc = -1;
+            break;
+        }
+
+        int * value = buffer_set_get_at(buffer_set, it);
+        if (*value != idx)
+        {
+            fprintf(stderr, "got %d instead of expected %d\n", *value, idx);
+            rc = -1;
+            break;
+        }
+
+        it = buffer_set_iterator_next(buffer_set, it);
+    }
+
+    if (it != buffer_set_end(buffer_set))
+    {
+        fprintf(stderr, "iterator unexpectedly not end\n");
+        rc = -1;
+    }
+
     buffer_set_destroy(buffer_set);
 
-    return 0;
+    return rc;
 }
