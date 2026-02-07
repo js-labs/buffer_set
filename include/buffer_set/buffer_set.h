@@ -143,6 +143,14 @@ int buffer_set_verify(
     FILE * file
 );
 
+/**
+ * Shrink the buffer capacity of the set if it is underutilized.
+ *
+ * If the number of elements in the set is less than one quarter of the
+ * current buffer capacity, the capacity is reduced by half.
+ */
+void buffer_set_shrink(buffer_set_t * buffer_set);
+
 void buffer_set_clear(buffer_set_t * buffer_set);
 void buffer_set_destroy(buffer_set_t * buffer_set);
 

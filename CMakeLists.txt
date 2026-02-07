@@ -31,6 +31,7 @@ if(BUILD_TESTS)
         tests/random_op.c
         tests/realloc_move.c
         tests/reg.c
+        tests/shrink.c
     )
 
     add_executable(buffer_set_tests ${TEST_SRCS})

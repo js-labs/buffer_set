@@ -43,6 +43,7 @@ int print_debug();
 int random_op();
 int realloc_move();
 int reg();
+int shrink();
 
 void run_test(int * failed_tests, const char * name, int (*test_func)())
 {
@@ -72,6 +73,7 @@ int main(int argc, const char * argv[])
     RUN_TEST(print_debug);
     RUN_TEST(random_op);
     RUN_TEST(reg);
+    RUN_TEST(shrink);
 
 #undef RUN_TEST
 
