@@ -53,6 +53,21 @@ buffer_set_t * buffer_set_create(
 uint16_t buffer_set_get_size(buffer_set_t * buffer_set);
 uint16_t buffer_set_get_capacity(buffer_set_t * buffer_set);
 
+/**
+ * Buffer set supports iteration over all items using an iterator.
+ *
+ * Example:
+ * @code
+ *   buffer_set_iterator_t * it = buffer_set_begin(buffer_set);
+ *   buffer_set_iterator_t * it_end = buffer_set_end(buffer_set);
+ *   while (it != it_end)
+ *   {
+ *       const void * value = buffer_set_get_at(buffer_set, it);
+ *       it = buffer_set_iterator_next(buffer_set, it);
+ *   }
+ * @endcode
+ */
+
 buffer_set_iterator_t * buffer_set_begin(buffer_set_t * buffer_set);
 buffer_set_iterator_t * buffer_set_end(buffer_set_t * buffer_set);
 
