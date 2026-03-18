@@ -38,3 +38,6 @@ Getting an elelemnt:
 int value = 42;
 int * buffer_value = buffer_set_get(buffer_set, &value);
 ```
+
+# Installation
+The library consists of a single source file and a single header file. The simplest way to use it is to add the repo as a submodule and include the source file directly in your codebase, or add it as a CMake subproject.
